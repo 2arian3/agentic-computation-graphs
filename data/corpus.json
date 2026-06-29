@@ -1,0 +1,82 @@
+[
+  {
+    "id": "D01",
+    "title": "Pirelle Institute",
+    "text": "The Pirelle Institute is a research institute founded in 1962 by the physicist Dr. Elara Venn. It is located in the coastal city of Sundpast and is known worldwide for its work on tidal-energy systems. The institute runs a joint tidal-engineering program with Orrin Maritime University."
+  },
+  {
+    "id": "D02",
+    "title": "Sundpast",
+    "text": "Sundpast is a coastal city and the capital of the country of Velmora. The Issen River flows through Sundpast on its way to the sea. The city is home to the Pirelle Institute and to Orrin Maritime University."
+  },
+  {
+    "id": "D03",
+    "title": "Velmora",
+    "text": "Velmora is a country on the continent of Orrin. Its capital is the city of Sundpast. The official currency of Velmora is the drell. Velmora is the only country where the rare ore lonite is mined."
+  },
+  {
+    "id": "D04",
+    "title": "Dr. Elara Venn",
+    "text": "Dr. Elara Venn is a physicist best known for founding the Pirelle Institute. She was born in the mountain town of Mossgate. In 1971 she received the Haltorn Prize for her pioneering work on tidal energy."
+  },
+  {
+    "id": "D05",
+    "title": "Haltorn Prize",
+    "text": "The Haltorn Prize is an annual science award. It has been awarded every year since 1949 in the country of Brandeth. The prize recognizes contributions to energy research."
+  },
+  {
+    "id": "D06",
+    "title": "Mossgate",
+    "text": "Mossgate is a mountain town and the capital of the country of Karst Reach. It is the birthplace of the physicist Dr. Elara Venn."
+  },
+  {
+    "id": "D07",
+    "title": "Corvane Dynamics",
+    "text": "Corvane Dynamics is an engineering company headquartered in the city of Thalix. The company designs and builds the Aurora-9 tidal turbine."
+  },
+  {
+    "id": "D08",
+    "title": "Aurora-9",
+    "text": "The Aurora-9 is a tidal turbine built by Corvane Dynamics. Its blades are manufactured from a lightweight metal alloy called veldanium."
+  },
+  {
+    "id": "D09",
+    "title": "Veldanium",
+    "text": "Veldanium is a lightweight metal alloy used in marine turbines. Its key ingredient is the rare ore lonite."
+  },
+  {
+    "id": "D10",
+    "title": "Thalix",
+    "text": "Thalix is an inland city and the capital of the country of Brandeth. It is the headquarters city of Corvane Dynamics."
+  },
+  {
+    "id": "D11",
+    "title": "Issen River",
+    "text": "The Issen River is the longest river on the continent of Orrin. It flows through the city of Sundpast before reaching the coast."
+  },
+  {
+    "id": "D12",
+    "title": "Idris Vale",
+    "text": "Idris Vale is the mayor of the city of Sundpast, having taken office in 2018."
+  },
+  {
+    "id": "D13",
+    "title": "Orrin Maritime University",
+    "text": "Orrin Maritime University is a university located in the city of Sundpast. Its tidal-engineering program is run in partnership with the Pirelle Institute."
+  },
+  {
+    "id": "D14",
+    "title": "Brandeth",
+    "text": "Brandeth is a country on the continent of Orrin. Its capital is the city of Thalix. The official currency of Brandeth is the marc."
+  },
+  {
+    "id": "D15",
+    "title": "Orrin",
+    "text": "Orrin is a continent. It contains the countries of Velmora, Brandeth, and Karst Reach."
+  },
+  {
+    "id": "D16",
+    "title": "Karst Reach",
+    "text": "Karst Reach is a mountainous country on the continent of Orrin. Its capital is the town of Mossgate. The official currency of Karst Reach is the stol."
+  }
+]

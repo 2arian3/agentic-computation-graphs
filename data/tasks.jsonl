@@ -1,0 +1,12 @@
+{"task_id": "T01", "hops": 2, "question": "What metal alloy is used for the blades of the turbine built by Corvane Dynamics?", "answers": ["veldanium"], "supporting": ["D07", "D08"]}
+{"task_id": "T02", "hops": 3, "question": "What currency is used in the country where the Pirelle Institute is located?", "answers": ["drell", "the drell"], "supporting": ["D01", "D02", "D03"]}
+{"task_id": "T03", "hops": 3, "question": "In which country was the founder of the Pirelle Institute born?", "answers": ["Karst Reach"], "supporting": ["D01", "D04", "D06"]}
+{"task_id": "T04", "hops": 2, "question": "Who is the mayor of the city that the Issen River flows through?", "answers": ["Idris Vale"], "supporting": ["D11", "D12"]}
+{"task_id": "T05", "hops": 3, "question": "What is the capital of the country where the Haltorn Prize is awarded?", "answers": ["Thalix"], "supporting": ["D05", "D14"]}
+{"task_id": "T06", "hops": 4, "question": "In which country is the key ingredient of the Aurora-9's blade alloy mined?", "answers": ["Velmora"], "supporting": ["D08", "D09", "D03"]}
+{"task_id": "T07", "hops": 3, "question": "On which continent is the Pirelle Institute located?", "answers": ["Orrin"], "supporting": ["D01", "D02", "D03"]}
+{"task_id": "T08", "hops": 2, "question": "Who founded the institute that partners with Orrin Maritime University's tidal-engineering program?", "answers": ["Elara Venn", "Dr. Elara Venn"], "supporting": ["D13", "D01"]}
+{"task_id": "T09", "hops": 3, "question": "What currency would you use in the city where Corvane Dynamics is headquartered?", "answers": ["marc", "the marc"], "supporting": ["D07", "D10", "D14"]}
+{"task_id": "T10", "hops": 2, "question": "What is the official currency of the country whose capital is Mossgate?", "answers": ["stol", "the stol"], "supporting": ["D06", "D16"]}
+{"task_id": "T11", "hops": 3, "question": "In what country is the prize awarded that was won by the founder of the Pirelle Institute?", "answers": ["Brandeth"], "supporting": ["D04", "D05"]}
+{"task_id": "T12", "hops": 4, "question": "What is the currency of the country where the Aurora-9's blade-alloy ingredient is mined?", "answers": ["drell", "the drell"], "supporting": ["D08", "D09", "D03"]}

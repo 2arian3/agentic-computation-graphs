@@ -1,0 +1,42 @@
+# Reproducibility manifest (documentation, not loaded by code — runtime config is
+# via environment variables; see ../.env.example and acg/config.py).
+#
+# A run in this project is fully described by (model, decode params, seed policy).
+# This file records the canonical settings used for the Month-1/Month-2 results so
+# they can be reproduced exactly.
+
+instrument:
+  serving_engine: vllm            # alternative: sglang (docker/serve_sglang.sh)
+  vllm_image: vllm/vllm-openai:latest
+  hardware: NVIDIA H100 MIG 1g.24gb slice (24 GB; ~20.9 GB free at startup)
+  cdi_device: nvidia.com/gpu=MIG-<slice-uuid>   # auto-detected by serve_vllm.sh
+
+model:
+  repo: Qwen/Qwen2.5-7B-Instruct  # 7.6B params, BF16; the FP16-class ceiling for 24 GB
+  served_name: qwen2.5-7b-instruct
+  dtype: bfloat16                 # native weights; "16-bit white-box" regime
+  max_model_len: 8192
+  gpu_memory_utilization: 0.85
+  engine_seed: 1234
+  tool_call_parser: hermes        # native function-calling for Qwen2.5
+
+decode:
+  temperature: 0.7                # 0.0 for determinism checks
+  top_p: 0.95
+  max_tokens: 1024
+  request_seed: 1234              # vary across reps for the sampling-variance study
+
+agent:
+  loop: thin emergent ReAct-style (acg/agent.py) — NOT LangGraph
+  max_steps: 8
+  tools: [search, read_document, finish]   # the fixed node alphabet
+  search_top_k: 3
+
+instrumentation:
+  standard: OpenTelemetry GenAI spans
+  exporter: local JSONL file (acg/tracing.py)
+  graph_reconstruction: offline, from acg.depends_on data-dependency edges (acg/graph.py)
+
+corpus:
+  store: data/corpus.json         # 16-doc owned, fictional, multi-hop mini-wiki
+  tasks: data/tasks.jsonl         # 12 multi-hop QA programs (2–4 hops) with gold answers

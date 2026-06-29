@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""Aggregate reconstructed ACGs into the distributions + structural-variance numbers
+that are the actual contribution (Month-2 milestone).
+
+Importable functions are used by run_experiment.py; it can also be run standalone on
+any trace file:
+
+  ./.venv/bin/python scripts/analyze.py --trace traces/experiment.jsonl
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import sys
+from collections import Counter, defaultdict
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from acg import graph as G
+
+_METRIC_FIELDS = [
+    "node_count", "num_llm_calls", "num_tool_calls",
+    "edge_count", "depth", "width",
+    "total_tokens", "input_tokens", "output_tokens", "wall_clock_s",
+]
+
+
+def _dist(values: list[float]) -> dict:
+    a = np.asarray(values, dtype=float)
+    if a.size == 0:
+        return {}
+    return {
+        "n": int(a.size),
+        "mean": round(float(a.mean()), 3),
+        "std": round(float(a.std(ddof=0)), 3),
+        "min": round(float(a.min()), 3),
+        "median": round(float(np.median(a)), 3),
+        "p95": round(float(np.percentile(a, 95)), 3),
+        "max": round(float(a.max()), 3),
+    }
+
+
+def graph_signature(g) -> tuple:
+    """A compact structural fingerprint of a run's ACG. Two runs with the same
+    signature have the same shape up to node identity."""
+    m = G.compute_metrics(g)
+    tb = tuple(sorted(m.tool_breakdown.items()))
+    return (m.num_llm_calls, m.num_tool_calls, m.depth, m.width, tb)
+
+
+def structural_variance(runs: list, *, ged_sample_pairs: int = 12, ged_timeout_s: float = 4.0) -> dict:
+    """Quantify how much the structure varies across runs of one task."""
+    sigs = [graph_signature(r.graph) for r in runs]
+    counts = Counter(sigs)
+    modal_sig, modal_n = counts.most_common(1)[0]
+    out = {
+        "distinct_signatures": len(counts),
+        "modal_signature_fraction": round(modal_n / len(runs), 3),  # proxy for a stable core
+        "modal_signature": {
+            "num_llm_calls": modal_sig[0], "num_tool_calls": modal_sig[1],
+            "depth": modal_sig[2], "width": modal_sig[3], "tools": dict(modal_sig[4]),
+        },
+    }
+
+    # Mean pairwise graph edit distance (labelled by node type+tool), sampled.
+    import itertools
+    import networkx as nx
+
+    def nmatch(a, b):
+        return a.get("type") == b.get("type") and a.get("tool_name") == b.get("tool_name")
+
+    pairs = list(itertools.combinations(range(len(runs)), 2))
+    if pairs:
+        rng = np.random.default_rng(0)
+        if len(pairs) > ged_sample_pairs:
+            idx = rng.choice(len(pairs), size=ged_sample_pairs, replace=False)
+            pairs = [pairs[i] for i in idx]
+        geds = []
+        for i, j in pairs:
+            try:
+                d = nx.graph_edit_distance(runs[i].graph, runs[j].graph,
+                                           node_match=nmatch, timeout=ged_timeout_s)
+                if d is not None:
+                    geds.append(d)
+            except Exception:
+                pass
+        if geds:
+            out["graph_edit_distance"] = {
+                "pairs_sampled": len(geds),
+                "mean": round(float(np.mean(geds)), 3),
+                "median": round(float(np.median(geds)), 3),
+                "max": round(float(np.max(geds)), 3),
+            }
+    return out
+
+
+def summarize(runs: list) -> dict:
+    by_task: dict[str, list] = defaultdict(list)
+    for r in runs:
+        by_task[r.task_id].append(r)
+
+    summary = {"overall": {}, "per_task": {}}
+    all_metrics = [r.metrics for r in runs]
+    summary["overall"] = {
+        "num_runs": len(runs),
+        "num_tasks": len(by_task),
+        "accuracy": round(np.mean([1.0 if m.outcome == "correct" else 0.0 for m in all_metrics]), 3),
+    }
+    for field in _METRIC_FIELDS:
+        summary["overall"][field] = _dist([getattr(m, field) for m in all_metrics])
+
+    for task_id, task_runs in sorted(by_task.items()):
+        ms = [r.metrics for r in task_runs]
+        entry = {
+            "num_runs": len(task_runs),
+            "accuracy": round(np.mean([1.0 if m.outcome == "correct" else 0.0 for m in ms]), 3),
+            "distributions": {f: _dist([getattr(m, f) for m in ms]) for f in _METRIC_FIELDS},
+            "structural_variance": structural_variance(task_runs),
+        }
+        summary["per_task"][task_id] = entry
+    return summary
+
+
+def write_metrics_csv(runs: list, path: str | Path) -> None:
+    rows = [r.metrics.to_row() for r in runs]
+    keys = sorted({k for row in rows for k in row})
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=keys)
+        w.writeheader()
+        for row in rows:
+            w.writerow(row)
+
+
+def make_plots(runs: list, outdir: str | Path) -> list[str]:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    by_task: dict[str, list] = defaultdict(list)
+    for r in runs:
+        by_task[r.task_id].append(r)
+    tasks = sorted(by_task)
+    saved = []
+
+    # (1) Distribution of total tokens per task (cost distribution; tail matters).
+    fig, ax = plt.subplots(figsize=(max(7, 1.1 * len(tasks)), 4.5))
+    data = [[r.metrics.total_tokens for r in by_task[t]] for t in tasks]
+    ax.boxplot(data, labels=tasks, showmeans=True)
+    ax.set_title("ACG cost distribution per task — total tokens")
+    ax.set_ylabel("total tokens (input+output)")
+    ax.set_xlabel("task")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    p = outdir / "dist_total_tokens.png"
+    plt.savefig(p, dpi=130); plt.close(); saved.append(str(p))
+
+    # (2) Distribution of node counts per task (graph SIZE distribution).
+    fig, ax = plt.subplots(figsize=(max(7, 1.1 * len(tasks)), 4.5))
+    data = [[r.metrics.node_count for r in by_task[t]] for t in tasks]
+    ax.boxplot(data, labels=tasks, showmeans=True)
+    ax.set_title("ACG size distribution per task — node count")
+    ax.set_ylabel("node count (LLM + tool)")
+    ax.set_xlabel("task")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    p = outdir / "dist_node_count.png"
+    plt.savefig(p, dpi=130); plt.close(); saved.append(str(p))
+    return saved
+
+
+def print_table(summary: dict) -> None:
+    from tabulate import tabulate
+    rows = []
+    for task_id, e in summary["per_task"].items():
+        d = e["distributions"]
+        sv = e["structural_variance"]
+        rows.append([
+            task_id, e["num_runs"], f'{e["accuracy"]:.2f}',
+            f'{d["node_count"]["mean"]:.1f}±{d["node_count"]["std"]:.1f}',
+            f'{d["node_count"]["median"]:.0f}/{d["node_count"]["p95"]:.0f}/{d["node_count"]["max"]:.0f}',
+            f'{d["depth"]["mean"]:.1f}', f'{d["width"]["mean"]:.2f}',
+            f'{d["total_tokens"]["mean"]:.0f}', f'{d["total_tokens"]["p95"]:.0f}',
+            sv["distinct_signatures"], f'{sv["modal_signature_fraction"]:.2f}',
+        ])
+    headers = ["task", "n", "acc", "nodes mean±sd", "nodes med/p95/max",
+               "depth", "width", "tok mean", "tok p95", "#sigs", "modal frac"]
+    print(tabulate(rows, headers=headers, tablefmt="github"))
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--trace", default="traces/experiment.jsonl")
+    ap.add_argument("--outdir", default="traces")
+    args = ap.parse_args()
+
+    runs = G.reconstruct_runs(args.trace)
+    print(f"reconstructed {len(runs)} runs from {args.trace}\n")
+    summary = summarize(runs)
+    print_table(summary)
+
+    outdir = Path(args.outdir)
+    write_metrics_csv(runs, outdir / "metrics.csv")
+    (outdir / "summary.json").write_text(json.dumps(summary, indent=2))
+    figs = make_plots(runs, outdir / "figures")
+    print(f"\nwrote {outdir/'metrics.csv'}, {outdir/'summary.json'}")
+    print("figures:", *figs, sep="\n  ")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

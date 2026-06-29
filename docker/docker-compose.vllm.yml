@@ -1,0 +1,44 @@
+# Compose alternative to docker/serve_vllm.sh.
+#
+# IMPORTANT: set the MIG slice UUID first (CDI requires the fully-qualified name):
+#   export ACG_GPU_DEVICE="nvidia.com/gpu=$(nvidia-smi -L | grep -oE 'MIG-[0-9a-f-]+' | head -n1)"
+#   docker compose -f docker/docker-compose.vllm.yml up -d
+#
+# Image layers land in Docker's containerd image store. If that store is on a small
+# root disk, relocate it to a big disk first (see README "Storage gotcha").
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: acg-vllm
+    ipc: host
+    shm_size: "2gb"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../hf-cache:/root/.cache/huggingface
+    environment:
+      - HF_HUB_OFFLINE=1
+    command: >
+      --model Qwen/Qwen2.5-7B-Instruct
+      --served-model-name qwen2.5-7b-instruct
+      --dtype auto
+      --max-model-len 8192
+      --gpu-memory-utilization 0.85
+      --seed 1234
+      --enable-auto-tool-choice
+      --tool-call-parser hermes
+    deploy:
+      resources:
+        reservations:
+          devices:
+            # CDI device request; ACG_GPU_DEVICE must be a full CDI name like
+            # nvidia.com/gpu=MIG-1845a46d-8f06-5483-9919-674d0a1e7e3d
+            - driver: cdi
+              device_ids:
+                - ${ACG_GPU_DEVICE:?set ACG_GPU_DEVICE to a CDI name, e.g. nvidia.com/gpu=MIG-...}
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/v1/models'); \" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 120s

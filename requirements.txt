@@ -1,0 +1,15 @@
+# Client-side dependencies for the ACG instrument (the model itself runs in the
+# vLLM/SGLang Docker container, not here). Install into a venv:
+#   python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+openai>=2.0,<3
+opentelemetry-api>=1.43,<2
+opentelemetry-sdk>=1.43,<2
+networkx>=3.4,<4
+numpy>=2.2,<3
+matplotlib>=3.10,<4
+tabulate>=0.9,<1
+pytest>=8
+# only needed to PRE-DOWNLOAD model weights from the host (optional; the container
+# can also download them itself):
+huggingface_hub>=0.26
+hf_transfer>=0.1

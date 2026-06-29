@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# local pip/temp caches (kept off the small root disk)
+.tmp/
+.pipcache/
+
+# model weights cache (large; re-downloadable)
+hf-cache/
+
+# generated outputs — keep the dirs, drop the artifacts
+traces/*.jsonl
+traces/*.csv
+traces/*.json
+traces/_*.log
+traces/figures/*.png
+
+# local env
+.env
