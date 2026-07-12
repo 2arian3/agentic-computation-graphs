@@ -16,6 +16,7 @@ traces/*.csv
 traces/*.json
 traces/_*.log
 traces/figures/*.png
+traces/figures/*.html
 
 # local env
 .env

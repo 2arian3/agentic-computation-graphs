@@ -5,6 +5,7 @@ openai>=2.0,<3
 opentelemetry-api>=1.43,<2
 opentelemetry-sdk>=1.43,<2
 networkx>=3.4,<4
+scipy>=1.10          # required by networkx graph-edit-distance
 numpy>=2.2,<3
 matplotlib>=3.10,<4
 tabulate>=0.9,<1

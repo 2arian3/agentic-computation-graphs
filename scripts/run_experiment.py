@@ -36,6 +36,7 @@ def main() -> int:
     ap.add_argument("--vary-seed", action="store_true",
                     help="use a different per-run seed (isolates sampling from serving noise)")
     ap.add_argument("--trace", default="traces/experiment.jsonl")
+    ap.add_argument("--outdir", default=None, help="where to write metrics/summary/figures (default: trace dir)")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -82,12 +83,19 @@ def main() -> int:
     print("== Per-task ACG size & structural variance ==")
     analyze.print_table(summary)
 
-    outdir = trace_file.parent
-    metrics_path = outdir / ("complex_metrics.csv" if "complex" in trace_file.stem else "metrics.csv")
-    summary_path = outdir / ("complex_summary.json" if "complex" in trace_file.stem else "summary.json")
+    outdir = Path(args.outdir) if args.outdir else trace_file.parent
+    outdir.mkdir(parents=True, exist_ok=True)
+    # Derive a filename tag from the trace stem so runs never clobber each other:
+    #   "experiment"        -> metrics.csv / summary.json / dist_*.png  (canonical study)
+    #   "complex_experiment"-> complex_*                                (preserved)
+    #   anything else        -> <stem>_*                                (e.g. scale_hivar_*)
+    stem = trace_file.stem
+    tag = "" if stem == "experiment" else ("complex_" if "complex" in stem else f"{stem}_")
+    metrics_path = outdir / f"{tag}metrics.csv"
+    summary_path = outdir / f"{tag}summary.json"
     analyze.write_metrics_csv(runs, metrics_path)
     summary_path.write_text(__import__("json").dumps(summary, indent=2))
-    figs = analyze.make_plots(runs, outdir / "figures")
+    figs = analyze.make_plots(runs, outdir / "figures", prefix=tag)
     print(f"\nwrote {metrics_path}, {summary_path}")
     print("figures:", *figs, sep="\n  ")
     return 0

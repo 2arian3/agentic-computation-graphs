@@ -79,7 +79,7 @@ class Agent:
     def run(self, task: Task, run_id: str | None = None) -> RunResult:
         run_id = run_id or uuid.uuid4().hex[:12]
         root_node_id = f"run:{run_id}"
-        tool_schemas = TOOLS.tool_schemas(self.cfg.search_top_k)
+        tool_schemas = TOOLS.tool_schemas(self.cfg.search_top_k, self.cfg.elicit_reasoning)
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},

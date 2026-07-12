@@ -1,5 +1,10 @@
 # 04 — Next steps
 
+> **⚠️ Historical (Month-2 roadmap).** Most items here are DONE. For the *current* plan and the
+> full record of what has been run, see **[07 — Experiment log](07-experiment-log.md)** (§E Next
+> steps) and **[06 — Critical review](06-critical-review-and-directions.md)** (Gate-1 verdict:
+> after RQ-N1 the focus shifts from *corpus* to *agent capability* — RQ-N2/N8/N3).
+
 The instrument is built and validated, and the first measurements are in
 ([03-results.md](03-results.md)). This is the gated roadmap for the rest of the contract,
 plus concrete near-term TODOs. Order matters: each phase de-risks the next, and we pivot
@@ -9,19 +14,24 @@ cheaply if an early phase shows the question is uninteresting.
 
 ## Immediate (finish Month 2)
 
-1. **Scale reps where variance is high.** T06 and T12 (4-hop) show the widest spread (6 and
-   5 distinct shapes at n=8). Run **30–50 reps** on at least these to get stable tail
-   estimates (the p95/p99 is what cost planning cares about). Cheap:
-   `make experiment REPS=40` (≈8 min for all tasks at the current 3.6 s/run; or restrict to
-   `--tasks T06,T12`).
-2. **Tighten the variance estimators.** With more reps, report a real **graph-edit-distance**
-   distribution per task (the machinery exists in `analyze.py`; currently sampled). Add a
-   confidence interval on the modal-signature fraction (the "stable core" proxy).
+1. ✅ **Scale reps where variance is high.** *Done* — T06 and T12 run at **50 reps** each
+   (`traces/scale_hivar.jsonl`; see [03-results.md §C.2](03-results.md)). Key result: n=8 had
+   **under-sampled** the variance — T06's distinct shapes went 6 → 14 and its modal fraction
+   0.38 → 0.20 at n=50. Rerun with `make experiment REPS=50 --tasks T06,T12` (or add
+   `--trace traces/<name>.jsonl` for a separate output set).
+2. ✅ **Tighten the variance estimators.** *Done* — `analyze.py` now reports a **95% Wilson CI**
+   on the modal-signature (stable-core) fraction and on accuracy, plus a **normalized
+   graph-edit-distance** distribution (GED ÷ avg graph size) with a fast upper-bound method and
+   a time budget. Added `scipy` to `requirements.txt`.
 3. **Fix or quarantine the weak tasks.** T11 is 0% correct and T03/T05 are 50%. Check whether
    it's a retrieval/answer-grading issue or genuine model failure; decide whether to keep
-   them (failures are still valid graphs) or revise the gold/aliases.
+   them (failures are still valid graphs) or revise the gold/aliases. *(next)*
 4. **Persist run-level provenance.** Write the resolved config (model, decode, seed policy,
    git SHA, image digest) alongside each `experiment.jsonl` so a trace is self-describing.
+
+   > **Note (rep budget):** at n=50 the tails (p95/p99) are on a firmer footing but the modal
+   > fraction CIs are still wide (T06: [0.11, 0.33]). Item 3/§"enough reps" should set a target
+   > precision; ~100+ reps would tighten the stable-core estimate further.
 
 ## Month 3 — characterize properly & stress the findings
 
@@ -29,9 +39,13 @@ cheaply if an early phase shows the question is uninteresting.
    (the main driver). Run the grid `temp ∈ {0.0, 0.3, 0.7, 1.0}`, fixed reps, and plot
    node-count/​token distributions vs temperature. Expect: higher temp → larger spread, more
    distinct shapes.
-6. **Second model if it fits 24 GB.** Compare against another open model (e.g. a different 7–8B
-   instruct, or an AWQ-quantized 14B) to test whether the "serial decomposition / width = 1"
-   observation is model-specific. One-line swap via `ACG_MODEL` + matching `ACG_TOOL_PARSER`.
+6. ✅ **Second model.** *Done* — benchmarked **Qwen2.5-14B-Instruct FP8** on the same slice
+   (see [03-results.md §C.3](03-results.md)). Accuracy 0.771 → **0.896** (FP8 is near-lossless,
+   so 2× params win), the 0%-task T11 → 100%, and crucially **width > 1 emerged** (parallel
+   tool calls on T05/T06/T07) — so the "serial decomposition / width = 1" finding IS
+   model-specific. Reusable via `scripts/compare_models.py`. Next: repeat with a 32B-AWQ (4-bit)
+   to see whether 4-bit erodes tool-call adherence / accuracy, and re-run the temperature sweep
+   per model.
 7. **Stable-core analysis.** Formalize the recurring subgraph: across runs of a task, extract
    the subgraph present in ≥90% of runs and report its size vs the full-graph size. This turns
    the "modal fraction" proxy into the actual stable-core result the proposal asks for.

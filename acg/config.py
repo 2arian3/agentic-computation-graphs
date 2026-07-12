@@ -69,6 +69,12 @@ class Config:
     tasks_path: Path = field(default_factory=lambda: DATA_DIR / "tasks.jsonl")
     search_top_k: int = field(default_factory=lambda: _env_i("ACG_SEARCH_TOP_K", 3))
 
+    # --- reasoning capture (RQ Q3) ---
+    # When true, each tool gains a required `thought` argument so the model must state
+    # WHY it takes each step. Off by default so the canonical experiments are unchanged.
+    elicit_reasoning: bool = field(
+        default_factory=lambda: os.environ.get("ACG_ELICIT_REASONING", "0") == "1")
+
     def to_dict(self) -> dict:
         d = asdict(self)
         d["corpus_path"] = str(self.corpus_path)

@@ -36,36 +36,56 @@ class Document:
 
 
 class Corpus:
-    def __init__(self, docs: list[Document]):
+    def __init__(self, docs: list[Document], distractors: list[Document] | None = None):
         self.docs = {d.id: d for d in docs}
         self._index = {d.id: set(_tokens(d.title + " " + d.text)) for d in docs}
+        # Distractor pool (RQ-N1). Distractors are READABLE (added to self.docs so the
+        # model can open them) but only enter SEARCH results when `noise` > 0.
+        distractors = distractors or []
+        self.distractor_ids = {d.id for d in distractors}
+        for d in distractors:
+            self.docs[d.id] = d
+        self._dindex = {d.id: set(_tokens(d.title + " " + d.text)) for d in distractors}
+        # noise = number of distractors guaranteed into each search result list
+        # (capped to keep >=1 real slot). Set by the experiment; 0 = clean baseline.
+        self.noise = 0
 
     @classmethod
-    def load(cls, path: str | Path) -> "Corpus":
+    def load(cls, path: str | Path, distractors_path: str | Path | None = None) -> "Corpus":
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        return cls([Document(**d) for d in data])
+        dist = []
+        if distractors_path and Path(distractors_path).exists():
+            dist = [Document(**d) for d in json.loads(Path(distractors_path).read_text(encoding="utf-8"))]
+        return cls([Document(**d) for d in data], dist)
+
+    def _rank(self, index: dict, q: set) -> list[tuple[int, str]]:
+        scored = [(len(q & toks), doc_id) for doc_id, toks in index.items()]
+        scored.sort(key=lambda s: (-s[0], s[1]))          # overlap desc, then stable by id
+        return [(o, i) for o, i in scored if o > 0]
+
+    def _result(self, doc_id: int, overlap: int) -> dict:
+        d = self.docs[doc_id]
+        snippet = d.text[:160] + ("..." if len(d.text) > 160 else "")
+        return {"doc_id": d.id, "title": d.title, "score": overlap, "snippet": snippet}
 
     def search(self, query: str, top_k: int = 3) -> list[dict]:
         """Return up to top_k docs ranked by keyword overlap with the query.
 
-        Ties (and zero-overlap fallbacks) are broken by document id so retrieval is
-        fully deterministic.
+        Deterministic (ties broken by id). When self.noise > 0, that many distractor
+        documents are injected into the result list, displacing lower-ranked real docs
+        (RQ-N1 retrieval-noise knob) — but at least one real slot is kept so tasks stay
+        solvable by a careful agent.
         """
         q = set(_tokens(query))
-        scored = []
-        for doc_id, toks in self._index.items():
-            overlap = len(q & toks)
-            scored.append((overlap, doc_id))
-        # higher overlap first, then stable by id
-        scored.sort(key=lambda s: (-s[0], s[1]))
-        results = []
-        for overlap, doc_id in scored[:top_k]:
-            if overlap == 0:
-                continue
-            d = self.docs[doc_id]
-            snippet = d.text[:160] + ("..." if len(d.text) > 160 else "")
-            results.append({"doc_id": d.id, "title": d.title, "score": overlap, "snippet": snippet})
-        return results
+        real = self._rank(self._index, q)
+        if self.noise <= 0 or not self._dindex:
+            return [self._result(i, o) for o, i in real[:top_k]]
+
+        n_d = min(self.noise, max(top_k - 1, 0))
+        dist = self._rank(self._dindex, q)[:n_d]
+        chosen = dist + real[: max(top_k - len(dist), 0)]
+        chosen.sort(key=lambda s: (-s[0], s[1]))          # present as one ranked list
+        return [self._result(i, o) for o, i in chosen[:top_k]]
 
     def read(self, doc_id: str) -> dict:
         doc_id = (doc_id or "").strip()

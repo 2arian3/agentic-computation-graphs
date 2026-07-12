@@ -24,9 +24,14 @@ FINISH = "finish"
 TOOL_NAMES = (SEARCH, READ_DOCUMENT, FINISH)
 
 
-def tool_schemas(search_top_k: int = 3) -> list[dict]:
-    """OpenAI-style function/tool schemas advertised to the model."""
-    return [
+def tool_schemas(search_top_k: int = 3, elicit_reasoning: bool = False) -> list[dict]:
+    """OpenAI-style function/tool schemas advertised to the model.
+
+    If `elicit_reasoning` is set, every tool gains a required `thought` argument so the
+    model must verbalize WHY it takes each step (RQ Q3). This makes the per-step
+    reasoning observable in the trace (tool_args) without changing the graph structure.
+    """
+    schemas = [
         {
             "type": "function",
             "function": {
@@ -76,6 +81,19 @@ def tool_schemas(search_top_k: int = 3) -> list[dict]:
             },
         },
     ]
+    if elicit_reasoning:
+        for s in schemas:
+            params = s["function"]["parameters"]
+            # put `thought` first so the model reasons BEFORE choosing arguments
+            params["properties"] = {
+                "thought": {
+                    "type": "string",
+                    "description": "Briefly, why you are taking this step given what you know so far.",
+                },
+                **params["properties"],
+            }
+            params["required"] = ["thought"] + params["required"]
+    return schemas
 
 
 def parse_arguments(raw: str) -> dict:

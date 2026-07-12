@@ -151,6 +151,89 @@ Largest graph in this batch: **T06 at 17 nodes / 8,975 tokens**
 
 ---
 
+## C.2 Scaled reps + tightened estimators (T06, T12 @ 50 reps ✅)
+
+Executes the first two "finish Month 2" items in [04-next-steps.md](04-next-steps.md).
+
+**Tightened estimators (item 2).** `scripts/analyze.py` now reports, in every per-task table:
+a **95% Wilson CI** on the modal-signature (stable-core) fraction and on accuracy — so
+small-*n* claims are honest — plus a **normalized graph-edit-distance** (GED ÷ average graph
+size), a size-comparable structural-variance measure. GED uses a fast upper bound
+(networkx `optimize_graph_edit_distance` first yield, ~10 ms/pair; needs `scipy`), bounded by
+a per-task time budget so analysis never stalls.
+
+**Scaled reps (item 1).**
+`run_experiment.py --tasks T06,T12 --reps 50 --temperature 0.7 --vary-seed --trace traces/scale_hivar.jsonl`
+→ **100 runs**, accuracy 0.87 (590 s). Outputs: `traces/scale_hivar_{metrics.csv,summary.json}`,
+`traces/figures/scale_hivar_dist_*.png` (kept separate from the canonical study).
+
+| task | n | acc [95% CI] | nodes mean±sd | nodes p95/p99/max | tok mean | tok p95/p99 | #shapes | modal frac [95% CI] | GED norm |
+|------|---|--------------|---------------|-------------------|----------|-------------|---------|---------------------|----------|
+| T06 | 50 | 0.88 [0.76, 0.94] | 11.2±2.6 | 15.6 / 16 / 16 | 5626 | 8886 / 8971 | **14** | **0.20 [0.11, 0.33]** | 0.80 |
+| T12 | 50 | 0.86 [0.74, 0.93] | 10.0±2.7 | 16 / 16 / 16 | 4794 | 9305 / 9817 | **12** | 0.44 [0.31, 0.58] | 0.79 |
+
+**Headline: n=8 under-sampled the variance.** Going 8 → 50 reps:
+- **T06 distinct graph shapes 6 → 14**, and modal (stable-core) fraction **0.38 → 0.20** — the
+  "stable core" is much weaker than the small sample implied.
+- **T12 shapes 5 → 12**; the modal fraction held (~0.4) but the tail widened (p99 tokens ≈ 9.8k).
+- Accuracy corrected downward with CIs (both were 1.00 at n=8 → now 0.88 / 0.86) — the small
+  sample was optimistic.
+
+This is the concrete justification for the proposal's "increase repetitions where variance is
+high": at n=8 we would have **materially under-reported** both the structural variance and the
+cost tail. The p95/p99 token figures — the numbers cost planning actually cares about — now
+rest on a 50-run footing rather than 8.
+
+---
+
+## C.3 Second model — Qwen2.5-14B FP8 vs 7B BF16 (✅, next-steps item 6)
+
+Tests the "larger model at lower precision, without losing accuracy" idea. Served
+`RedHatAI/Qwen2.5-14B-Instruct-FP8-dynamic` (W8A8-FP8, ~14 GB weights) on the *same* MIG
+slice, same decode/seed policy, same 12 tasks × 8 reps. Compared with
+`scripts/compare_models.py` (7B `traces/summary.json` vs 14B `traces/qwen14b_fp8_summary.json`).
+
+**Overall:** accuracy **0.771 [0.68, 0.84] → 0.896 [0.82, 0.94]** (Δ **+12.5 pts**);
+nodes/run 7.8 → 7.3; tokens/run ≈ unchanged (3450 → 3461); width 1.00 → **1.05**;
+5.7 s/run (≈1.6× the 7B, as expected for 2× params in FP8).
+
+| task | acc 7B | acc 14B-FP8 | nodes 7B→14B | width 7B→14B | Δtok | #shapes/modal 7B→14B |
+|------|--------|-------------|--------------|--------------|------|----------------------|
+| T01 | 1.00 | **0.62 ↓** | 5.9 → 3.5 | 1 → 1 | −625 | 2/0.88 → 4/0.38 |
+| T02 | 0.75 | **1.00 ↑** | 7.8 → 7.5 | 1 → 1 | −197 | 3/0.50 → 2/0.75 |
+| T03 | 0.50 | **0.75 ↑** | 7.0 → 7.6 | 1 → 1 | +848 | 2/0.50 → 5/0.38 |
+| T05 | 0.50 | **0.88 ↑** | 9.1 → 8.1 | 1 → **1.25** | −306 | 4/0.50 → 5/0.38 |
+| T06 | 1.00 | **0.75 ↓** | 11.1 → 8.6 | 1 → **1.25** | −1558 | 6/0.38 → 4/0.62 |
+| T07 | 0.75 | 0.88 ↑ | 7.4 → 7.2 | 1 → **1.12** | +182 | 3/0.75 → 3/0.75 |
+| T09 | 0.75 | **1.00 ↑** | 9.4 → 7.0 | 1 → 1 | −1092 | 3/0.75 → 2/0.50 |
+| T11 | **0.00** | **1.00 ↑↑** | 9.0 → 8.2 | 1 → 1 | +155 | 2/0.50 → 3/0.75 |
+| T12 | 1.00 | 0.88 ↓ | 9.5 → 8.1 | 1 → 1 | −367 | 5/0.38 → 3/0.50 |
+
+(T04, T08, T10 stay at 1.00 for both.) Findings:
+
+1. **FP8 did not cost accuracy — the opposite.** Going 7B-BF16 → 14B-FP8, accuracy *rose*
+   +12.5 pts with barely-overlapping CIs. This confirms the recommendation: **8-bit (FP8) is
+   near-lossless, so the 2× parameters dominate.** "Larger + lower-precision" was a clear win
+   *because* the lower precision was 8-bit, not 4-bit.
+2. **It fixes the weak tasks.** The 0%-accuracy T11 goes to **100%**; T05 0.50→0.88, T03
+   0.50→0.75, T02/T09 to 1.00. This resolves most of next-steps item 3 by capability.
+3. **But bigger is not uniformly better — the error profile changes.** T01 regresses
+   1.00→0.62 and T06 1.00→0.75. On T01 the 14B *short-circuits*: node count drops 5.9→3.5, i.e.
+   it often skips the `read_document` hop and answers over-confidently (and wrong). So model
+   scale changes *where* errors and variance live, not just their amount.
+4. **Width > 1 emerges.** The 7B was strictly serial (width = 1 everywhere); the 14B issues
+   **parallel tool calls** on T05/T06/T07 (width up to 1.25). This partially overturns the
+   "serial decomposition" finding and is exactly the item-8 branching, arising naturally from
+   capability rather than being imposed.
+5. **The bigger model is often *cheaper* on hard tasks.** It solves several multi-hop tasks in
+   fewer nodes/tokens (T06 −1558 tok, T09 −1092 tok) by looping less — a genuinely useful
+   cost result: capability can reduce ACG size, not only accuracy.
+
+Artifacts: `traces/qwen14b_fp8.jsonl`, `traces/qwen14b_fp8_{metrics.csv,summary.json}`,
+`traces/figures/qwen14b_fp8_dist_*.png`. Reproduce the table with `scripts/compare_models.py`.
+
+---
+
 ## D. Single-run exemplar graphs
 
 `scripts/run_single.py` — one trace + PNG per complex task (`traces/single_<task>.jsonl`,
@@ -205,6 +288,13 @@ structures. So in this batch, **all** run-to-run structural variance is attribut
 **sampling**, and serving-batch noise contributed none that changed graph structure — exactly
 the clean separation the proposal's §7 describes. (This is a single-task, 12-run snapshot, not
 yet a thorough claim — see [next steps](04-next-steps.md).)
+
+> **⚠️ Revised by the exhaustive ablation ([RQ-A1](05-research-questions.md)).** A larger,
+> 20-rep ablation across seed × prefix-cache × concurrency shows this snapshot was too clean:
+> at fixed seed the ACG is byte-identical **only with the prefix cache OFF**. With the cache
+> ON, fixed-seed still yields ~3 distinct graphs, and concurrency adds more. So run-to-run
+> variance has **three** sources — sampling (dominant), the **KV/prefix cache** (real,
+> secondary), and batching — not sampling alone. See [05 §RQ-A1](05-research-questions.md).
 
 ---
 

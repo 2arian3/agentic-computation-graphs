@@ -55,7 +55,11 @@ docker run -d \
   --gpu-memory-utilization "$GPU_MEM_UTIL" \
   --seed "$SEED" \
   --enable-auto-tool-choice \
-  --tool-call-parser "$TOOL_PARSER"
+  --tool-call-parser "$TOOL_PARSER" \
+  ${ACG_EXTRA_ARGS:-}
+  # ACG_EXTRA_ARGS lets experiments pass extra vLLM flags, e.g. for the Q1 variance
+  # ablation: ACG_EXTRA_ARGS="--no-enable-prefix-caching" to serve with the KV prefix
+  # cache OFF, or "--kv-cache-dtype fp8" etc.
 
 echo ">> Container '$CONTAINER_NAME' started. Follow logs with:"
 echo "   docker logs -f $CONTAINER_NAME"

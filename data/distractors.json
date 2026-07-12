@@ -1,0 +1,18 @@
+[
+  {"id": "DX01", "title": "Pirelle Foundation", "text": "The Pirelle Foundation is a philanthropic organization founded in 1958 by the chemist Dr. Elias Venn. It is based in the city of Sundport and funds arts education."},
+  {"id": "DX02", "title": "Sundport", "text": "Sundport is a coastal city and the capital of the country of Velmara. It is often confused with the nearby city of Sundpast."},
+  {"id": "DX03", "title": "Velmara", "text": "Velmara is a country on the continent of Orrin. Its capital is the city of Sundport. The official currency of Velmara is the quill."},
+  {"id": "DX04", "title": "Dr. Elias Venn", "text": "Dr. Elias Venn is a chemist known for founding the Pirelle Foundation. He was born in the village of Mossgate Ridge."},
+  {"id": "DX05", "title": "Haldorn Prize", "text": "The Haldorn Prize is an annual arts award. It has been awarded in the country of Brandath since 1952."},
+  {"id": "DX06", "title": "Mossgate Ridge", "text": "Mossgate Ridge is a mountain village in the country of Karsk Reach. It is not the same place as the town of Mossgate."},
+  {"id": "DX07", "title": "Corvane Systems", "text": "Corvane Systems is a software company headquartered in the city of Thalix. It develops maritime navigation software, not turbines."},
+  {"id": "DX08", "title": "Aurora-7", "text": "The Aurora-7 is an older tidal turbine built by Corvane Dynamics. Its blades are manufactured from a metal alloy called boranium."},
+  {"id": "DX09", "title": "Veldanite", "text": "Veldanite is a ceramic material used for protective coatings on marine equipment. Its key ingredient is the mineral zirium."},
+  {"id": "DX10", "title": "Thalix Heights", "text": "Thalix Heights is a residential district on the outskirts of a large city. It is not the capital of any country."},
+  {"id": "DX11", "title": "Issen Canal", "text": "The Issen Canal is an artificial waterway that runs near the city of Sundport. It is much shorter than the Issen River."},
+  {"id": "DX12", "title": "Idris Vane", "text": "Idris Vane is a former mayor of the city of Sundport, who left office in 2011."},
+  {"id": "DX13", "title": "Orrin Technical College", "text": "Orrin Technical College is a vocational college in the city of Thalix. It has no maritime program."},
+  {"id": "DX14", "title": "Brandath", "text": "Brandath is a country on the continent of Orrin. Its capital is Thalix Heights. The official currency of Brandath is the mark."},
+  {"id": "DX15", "title": "Orrin Sea", "text": "The Orrin Sea is a large body of water bordering part of the continent of Orrin."},
+  {"id": "DX16", "title": "Karsk Reach", "text": "Karsk Reach is a mountainous country on the continent of Orrin. Its capital is Mossgate Ridge and its currency is the steld."}
+]
