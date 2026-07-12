@@ -25,12 +25,15 @@ from acg.corpus import Corpus
 from acg.agent import Agent
 from acg.tasks import load_tasks
 from acg import graph as G
+from acg import provenance as P
 import scripts.analyze as analyze  # noqa: E402
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default="all", help="'all' or comma-separated task_ids")
+    ap.add_argument("--tasks-file", default=None,
+                    help="path to a tasks .jsonl (default: cfg.tasks_path). e.g. data/tasks_branch.jsonl")
     ap.add_argument("--reps", type=int, default=30, help="repetitions per task")
     ap.add_argument("--temperature", type=float, default=None, help="override decode temperature")
     ap.add_argument("--vary-seed", action="store_true",
@@ -49,7 +52,8 @@ def main() -> int:
     T.configure_tracing(trace_file)
 
     corpus = Corpus.load(cfg.corpus_path)
-    all_tasks = load_tasks(cfg.tasks_path)
+    tasks_path = args.tasks_file or cfg.tasks_path
+    all_tasks = load_tasks(tasks_path)
     if args.tasks != "all":
         wanted = set(args.tasks.split(","))
         all_tasks = [t for t in all_tasks if t.task_id in wanted]
@@ -58,6 +62,21 @@ def main() -> int:
     total = len(all_tasks) * args.reps
     print(f"Running {len(all_tasks)} tasks x {args.reps} reps = {total} runs "
           f"@ temperature={cfg.decode.temperature}, vary_seed={args.vary_seed}\n")
+
+    # Provenance: pin config + serving stack + seed policy so this trace is self-describing.
+    seed_policy = (f"varied per run: seed = 1000 + rep (reps 0..{args.reps - 1})"
+                   if args.vary_seed else f"fixed: seed = {cfg.decode.seed}")
+    prov = P.capture(cfg, experiment=trace_file.stem, extra={
+        "tasks": [t.task_id for t in all_tasks],
+        "reps": args.reps,
+        "total_runs": total,
+        "temperature": cfg.decode.temperature,
+        "vary_seed": args.vary_seed,
+        "seed_policy": seed_policy,
+        "trace_file": str(trace_file),
+        "tasks_file": str(tasks_path),
+        "max_tool_workers": cfg.max_tool_workers,
+    })
 
     t0 = time.time()
     done = correct = 0
@@ -95,8 +114,10 @@ def main() -> int:
     summary_path = outdir / f"{tag}summary.json"
     analyze.write_metrics_csv(runs, metrics_path)
     summary_path.write_text(__import__("json").dumps(summary, indent=2))
+    prov_path = outdir / f"{tag}provenance.json"
+    P.write(prov, prov_path)
     figs = analyze.make_plots(runs, outdir / "figures", prefix=tag)
-    print(f"\nwrote {metrics_path}, {summary_path}")
+    print(f"\nwrote {metrics_path}, {summary_path}, {prov_path}")
     print("figures:", *figs, sep="\n  ")
     return 0
 

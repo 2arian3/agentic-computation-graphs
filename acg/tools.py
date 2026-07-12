@@ -20,16 +20,26 @@ from .corpus import Corpus
 SEARCH = "search"
 READ_DOCUMENT = "read_document"
 FINISH = "finish"
+SUB_AGENT = "sub_agent"
 
+# The core alphabet used by the canonical experiments.
 TOOL_NAMES = (SEARCH, READ_DOCUMENT, FINISH)
+# The extended alphabet including the opt-in branch tool (RQ-N2).
+TOOL_NAMES_EXT = (SEARCH, READ_DOCUMENT, FINISH, SUB_AGENT)
 
 
-def tool_schemas(search_top_k: int = 3, elicit_reasoning: bool = False) -> list[dict]:
+def tool_schemas(search_top_k: int = 3, elicit_reasoning: bool = False,
+                 include_sub_agent: bool = False) -> list[dict]:
     """OpenAI-style function/tool schemas advertised to the model.
 
     If `elicit_reasoning` is set, every tool gains a required `thought` argument so the
     model must verbalize WHY it takes each step (RQ Q3). This makes the per-step
     reasoning observable in the trace (tool_args) without changing the graph structure.
+
+    If `include_sub_agent` is set, the model is additionally offered `sub_agent` (RQ-N2):
+    an opt-in branch tool that delegates a self-contained sub-question to a nested
+    assistant. Emitting several `sub_agent` calls in one turn lets the graph fan out into
+    a real tree; the executor runs them concurrently so `width_executed` can exceed 1.
     """
     schemas = [
         {
@@ -81,6 +91,30 @@ def tool_schemas(search_top_k: int = 3, elicit_reasoning: bool = False) -> list[
             },
         },
     ]
+    if include_sub_agent:
+        schemas.append({
+            "type": "function",
+            "function": {
+                "name": SUB_AGENT,
+                "description": (
+                    "Delegate a self-contained sub-question to a fresh research assistant that "
+                    "has the same search/read tools and returns a short answer. Use it to "
+                    "investigate several entities independently: emit ONE sub_agent call per "
+                    "entity IN THE SAME TURN and they are researched in parallel, then combine "
+                    "the answers."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "question": {
+                            "type": "string",
+                            "description": "A single, self-contained sub-question to research.",
+                        }
+                    },
+                    "required": ["question"],
+                },
+            },
+        })
     if elicit_reasoning:
         for s in schemas:
             params = s["function"]["parameters"]

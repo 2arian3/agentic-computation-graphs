@@ -61,8 +61,9 @@ class TracedLLMClient:
         depends_on: list[str],
         run_id: str,
         task_id: str,
+        node_id: str | None = None,
     ) -> LLMResult:
-        node_id = f"llm:{step}"
+        node_id = node_id or f"llm:{step}"
         d = self.cfg.decode
         with self.tracer.start_as_current_span(
             f"chat {self.cfg.model}", kind=SpanKind.CLIENT

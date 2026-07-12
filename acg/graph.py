@@ -318,6 +318,18 @@ def _max_temporal_overlap(intervals: list[tuple]) -> int:
     return peak
 
 
+def _top_level_tool_nodes(g: nx.DiGraph, tool_nodes: list) -> list:
+    """Tool nodes with no tool-node ancestor -- operations issued at the top level of the
+    run, not nested inside a sub_agent. Used for width_executed so a sub_agent (a container
+    span that envelopes its own nested tools) counts as ONE in-flight operation and is never
+    double-counted with the tools beneath it. For flat runs (no sub_agents) this is every
+    tool node, so the metric is unchanged there."""
+    return [
+        n for n in tool_nodes
+        if not any(g.nodes[a].get("type") == T.NODE_TYPE_TOOL for a in nx.ancestors(g, n))
+    ]
+
+
 def _levels_from_root(g: nx.DiGraph, root: str) -> dict[str, int]:
     """Longest-path distance (in edges) from root to each node, via topo-order DP."""
     level = {n: 0 for n in g.nodes()}
@@ -347,12 +359,14 @@ def compute_metrics(g: nx.DiGraph, *, run_id="", task_id="", trace_id="") -> ACG
     else:
         depth = width = 0
 
-    # Executed (realized) parallelism: how many tool spans overlapped in wall-clock time.
-    # On serial traces this is 1 (or 0 with no tools); it exceeds 1 only when the executor
-    # actually ran tool calls concurrently (see cfg.max_tool_workers).
+    # Executed (realized) parallelism: how many top-level tool spans overlapped in
+    # wall-clock time. On serial traces this is 1 (or 0 with no tools); it exceeds 1 only
+    # when the executor actually ran tool calls concurrently (see cfg.max_tool_workers),
+    # e.g. sibling sub_agents. Nested tools inside a sub_agent are excluded so the container
+    # is not double-counted with its own children.
     width_executed = _max_temporal_overlap([
         (g.nodes[n].get("start_time_ns"), g.nodes[n].get("end_time_ns"))
-        for n in tool_nodes
+        for n in _top_level_tool_nodes(g, tool_nodes)
     ])
 
     in_tok = sum(g.nodes[n]["input_tokens"] for n in llm_nodes)

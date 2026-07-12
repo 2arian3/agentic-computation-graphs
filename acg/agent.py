@@ -52,6 +52,24 @@ SYSTEM_PROMPT = (
     "until you can justify the answer from documents you have read."
 )
 
+# Appended to the system prompt only when the sub_agent branch tool is enabled (RQ-N2).
+# It tells the model the fan-out capability exists; whether it uses it is the measurement.
+SUB_AGENT_HINT = (
+    "\n\nYou also have a `sub_agent` tool that delegates a self-contained sub-question to a "
+    "fresh assistant (with the same search/read tools) and returns its answer. When the "
+    "question compares or aggregates over several entities, emit ONE `sub_agent` call per "
+    "entity IN THE SAME TURN so they are researched in parallel, then combine their answers "
+    "and `finish`."
+)
+
+# A nested sub_agent researches ONE sub-question and returns a short answer.
+SUB_AGENT_SYSTEM_PROMPT = (
+    "You are a research assistant answering ONE focused sub-question using ONLY a private, "
+    "fictional document store via the provided tools. Use `search` then `read_document` to "
+    "gather the facts, then call `finish` with a short, concise answer. Do not rely on prior "
+    "knowledge."
+)
+
 
 @dataclass
 class RunResult:
@@ -80,10 +98,14 @@ class Agent:
     def run(self, task: Task, run_id: str | None = None) -> RunResult:
         run_id = run_id or uuid.uuid4().hex[:12]
         root_node_id = f"run:{run_id}"
-        tool_schemas = TOOLS.tool_schemas(self.cfg.search_top_k, self.cfg.elicit_reasoning)
+        tool_schemas = TOOLS.tool_schemas(
+            self.cfg.search_top_k, self.cfg.elicit_reasoning,
+            include_sub_agent=self.cfg.enable_sub_agent,
+        )
+        system_content = SYSTEM_PROMPT + (SUB_AGENT_HINT if self.cfg.enable_sub_agent else "")
 
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": f"Question: {task.question}"},
         ]
 
@@ -219,7 +241,7 @@ class Agent:
 
     def _execute_one_tool(
         self, tc, *, step: int, idx: int, parent_ctx, llm_node_id: str,
-        run_id: str, task_id: str,
+        run_id: str, task_id: str, node_prefix: str = "", allow_sub_agent: bool = True,
     ) -> dict:
         """Execute a single tool call inside its own span and return a plain record.
 
@@ -227,10 +249,14 @@ class Agent:
         it is safe to call from worker threads. The caller applies the returned records in
         emit order. Each tool span is parented under the LLM call (llm_node_id) through the
         explicit parent context, which is what keeps cross-thread parenting correct.
+
+        `node_prefix` namespaces the node id (used by nested sub_agents so their subtree
+        does not collide with the parent). `sub_agent` (when allowed) runs a nested assistant
+        whose spans hang under this tool span, turning the ACG into a real tree.
         """
         name = tc.function.name
         args = TOOLS.parse_arguments(tc.function.arguments)
-        tool_node_id = f"tool:{step}:{idx}"
+        tool_node_id = f"{node_prefix}tool:{step}:{idx}"
         with self.tracer.start_as_current_span(
             f"execute_tool {name}", context=parent_ctx, kind=SpanKind.INTERNAL
         ) as tspan:
@@ -245,7 +271,14 @@ class Agent:
             tspan.set_attribute(T.ACG_DEPENDS_ON, json.dumps([llm_node_id]))
             tspan.set_attribute(T.ACG_TOOL_ARGS, json.dumps(args)[:2000])
 
-            result_obj = TOOLS.execute(name, args, self.corpus, search_top_k=self.cfg.search_top_k)
+            if name == TOOLS.SUB_AGENT and allow_sub_agent:
+                result_obj = self._run_sub_agent(
+                    str(args.get("question", "")).strip(),
+                    prefix=f"{tool_node_id}/", parent_node_id=tool_node_id,
+                    run_id=run_id, task_id=task_id,
+                )
+            else:
+                result_obj = TOOLS.execute(name, args, self.corpus, search_top_k=self.cfg.search_top_k)
             result_json = json.dumps(result_obj)
             tspan.set_attribute(T.ACG_TOOL_RESULT_CHARS, len(result_json))
             tspan.add_event("acg.tool.result", {"content": result_json[:8000]})
@@ -261,3 +294,57 @@ class Agent:
             "is_finish": is_finish,
             "answer": answer,
         }
+
+    def _run_sub_agent(self, question: str, *, prefix: str, parent_node_id: str,
+                       run_id: str, task_id: str) -> dict:
+        """Run a nested, corpus-grounded assistant on ONE sub-question.
+
+        Emits a namespaced subtree (node ids prefixed by the sub_agent tool node) in the
+        SAME trace, so acg/graph.py reconstructs the ACG as a real tree/DAG. Sub-agents are
+        not offered `sub_agent` themselves, so nesting is exactly one level deep. Tools here
+        run serially; the parallelism we measure is across sibling sub_agents at the parent
+        level (their tool spans overlap in wall-clock time -> width_executed > 1).
+        """
+        sub_tools = TOOLS.tool_schemas(
+            self.cfg.search_top_k, self.cfg.elicit_reasoning, include_sub_agent=False,
+        )
+        messages = [
+            {"role": "system", "content": SUB_AGENT_SYSTEM_PROMPT},
+            {"role": "user", "content": f"Question: {question}"},
+        ]
+        depends_on = [parent_node_id]
+        answer: str | None = None
+        for s in range(self.cfg.sub_agent_max_steps):
+            result = self.client.chat(
+                messages, sub_tools, step=s, depends_on=depends_on,
+                run_id=run_id, task_id=task_id, node_id=f"{prefix}llm:{s}",
+            )
+            if not result.tool_calls:
+                answer = (result.content or "").strip() or None
+                break
+            messages.append({
+                "role": "assistant",
+                "content": result.content or "",
+                "tool_calls": [
+                    {"id": tc.id, "type": "function",
+                     "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                    for tc in result.tool_calls
+                ],
+            })
+            parent_ctx = self.client.context_for(result.span_context)
+            step_nodes: list[str] = []
+            finished = False
+            for idx, tc in enumerate(result.tool_calls):
+                rec = self._execute_one_tool(
+                    tc, step=s, idx=idx, parent_ctx=parent_ctx, llm_node_id=result.node_id,
+                    run_id=run_id, task_id=task_id, node_prefix=prefix, allow_sub_agent=False,
+                )
+                step_nodes.append(rec["tool_node_id"])
+                messages.append({"role": "tool", "tool_call_id": rec["tc_id"], "content": rec["result_json"]})
+                if rec["is_finish"]:
+                    answer = rec["answer"]
+                    finished = True
+            if finished:
+                break
+            depends_on = step_nodes or [result.node_id]
+        return {"sub_question": question, "answer": answer or ""}

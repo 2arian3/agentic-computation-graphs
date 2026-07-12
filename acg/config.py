@@ -81,6 +81,17 @@ class Config:
     elicit_reasoning: bool = field(
         default_factory=lambda: os.environ.get("ACG_ELICIT_REASONING", "0") == "1")
 
+    # --- branch tool (RQ-N2) ---
+    # When true, the model is offered `sub_agent`, an opt-in tool that delegates a
+    # sub-question to a nested assistant. Emitting several in one turn lets the graph fan
+    # out into a real tree and (via the concurrent executor) realizes width_executed > 1.
+    # Off by default so the canonical 3-tool experiments are unchanged.
+    enable_sub_agent: bool = field(
+        default_factory=lambda: os.environ.get("ACG_ENABLE_SUB_AGENT", "0") == "1")
+    # Step budget for each nested sub_agent run (kept small; sub-agents cannot themselves
+    # spawn sub_agents, so nesting is exactly one level deep).
+    sub_agent_max_steps: int = field(default_factory=lambda: _env_i("ACG_SUB_AGENT_MAX_STEPS", 6))
+
     def to_dict(self) -> dict:
         d = asdict(self)
         d["corpus_path"] = str(self.corpus_path)

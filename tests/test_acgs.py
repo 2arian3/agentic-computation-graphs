@@ -133,6 +133,46 @@ def test_width_distinguishes_emitted_from_executed():
     assert "width_executed" in m_par.to_row()   # surfaced for the metrics CSV
 
 
+def _sub_agent_run_spans():
+    """root -> llm:0 -> {sub_agent A, sub_agent B} (overlapping) -> llm:1 -> finish.
+    Each sub_agent tool span envelopes a nested llm + search subtree (namespaced ids)."""
+    S = [
+        _mk_span("run:r", T.NODE_TYPE_AGENT_RUN, [], 0, 1000,
+                 **{T.ACG_OUTCOME: "correct", T.ACG_RUN_ID: "r", T.ACG_TASK_ID: "TX"}),
+        _mk_span("llm:0", T.NODE_TYPE_LLM, ["run:r"], 10, 20,
+                 **{T.GEN_AI_USAGE_INPUT_TOKENS: 50, T.GEN_AI_USAGE_OUTPUT_TOKENS: 10}),
+    ]
+    for k, (a, b) in enumerate([(30, 200), (32, 205)]):   # two sub_agents, overlapping
+        tid = f"tool:0:{k}"
+        S += [
+            _mk_span(tid, T.NODE_TYPE_TOOL, ["llm:0"], a, b,
+                     **{T.GEN_AI_TOOL_NAME: "sub_agent", T.ACG_STEP: 0}),
+            _mk_span(f"{tid}/llm:0", T.NODE_TYPE_LLM, [tid], a + 2, a + 8,
+                     **{T.GEN_AI_USAGE_INPUT_TOKENS: 20, T.GEN_AI_USAGE_OUTPUT_TOKENS: 5}),
+            _mk_span(f"{tid}/tool:0:0", T.NODE_TYPE_TOOL, [f"{tid}/llm:0"], a + 9, a + 15,
+                     **{T.GEN_AI_TOOL_NAME: "search", T.ACG_STEP: 0}),
+        ]
+    S += [
+        _mk_span("llm:1", T.NODE_TYPE_LLM, ["tool:0:0", "tool:0:1"], 220, 230,
+                 **{T.GEN_AI_USAGE_INPUT_TOKENS: 80, T.GEN_AI_USAGE_OUTPUT_TOKENS: 12}),
+        _mk_span("tool:1:0", T.NODE_TYPE_TOOL, ["llm:1"], 231, 235,
+                 **{T.GEN_AI_TOOL_NAME: "finish", T.ACG_STEP: 1}),
+    ]
+    return S
+
+
+def test_sub_agent_produces_tree_and_executed_width():
+    g = G.build_graph(_sub_agent_run_spans())
+    m = G.compute_metrics(g)
+    assert nx.is_directed_acyclic_graph(g)
+    # nested subtree nodes exist, namespaced under their sub_agent tool node
+    assert "tool:0:0/llm:0" in g and "tool:0:1/tool:0:0" in g
+    assert m.width >= 2            # two sub_agent calls emitted at one level
+    assert m.width_executed == 2   # the two sub_agent containers overlap; nested tools excluded
+    assert m.depth >= 4            # a real tree, deeper than a flat chain
+    assert m.num_tool_calls == 5   # 2 sub_agents + 2 nested searches + 1 finish
+
+
 # --------------------------- live ACG tests ------------------------------- #
 def _assert_valid_acg(g: nx.DiGraph):
     assert g.number_of_nodes() > 0
