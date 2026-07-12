@@ -319,15 +319,16 @@ def _max_temporal_overlap(intervals: list[tuple]) -> int:
 
 
 def _top_level_tool_nodes(g: nx.DiGraph, tool_nodes: list) -> list:
-    """Tool nodes with no tool-node ancestor -- operations issued at the top level of the
-    run, not nested inside a sub_agent. Used for width_executed so a sub_agent (a container
-    span that envelopes its own nested tools) counts as ONE in-flight operation and is never
-    double-counted with the tools beneath it. For flat runs (no sub_agents) this is every
-    tool node, so the metric is unchanged there."""
-    return [
-        n for n in tool_nodes
-        if not any(g.nodes[a].get("type") == T.NODE_TYPE_TOOL for a in nx.ancestors(g, n))
-    ]
+    """Tool nodes issued at the top level of the run, i.e. NOT nested inside a sub_agent.
+
+    A nested tool carries a '/'-namespaced id (e.g. `tool:0:1/tool:0:0`); a top-level tool
+    does not (`tool:0:1`). We key on that, NOT on graph ancestry: sequential top-level tools
+    across steps legitimately have earlier tools as ancestors, so an ancestry test would
+    wrongly drop every tool after step 0. Used for width_executed so a sub_agent container
+    counts as ONE in-flight operation (not double-counted with the tools beneath it) while
+    concurrent top-level operations at any step are still counted. For flat runs (no
+    sub_agents) every tool is top-level, so the metric is unchanged there."""
+    return [n for n in tool_nodes if "/" not in str(n)]
 
 
 def _levels_from_root(g: nx.DiGraph, root: str) -> dict[str, int]:
