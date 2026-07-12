@@ -7,7 +7,12 @@ size/structure metrics the proposal calls for:
   * node count, split by type (LLM calls vs tool calls, and per tool)
   * edge count and the dependency structure
   * depth  -- the longest dependency chain (latency-related)
-  * width  -- the maximum branching at one dependency level (parallelism potential)
+  * width  -- structural (emitted) branching: the most nodes sharing one dependency
+              level, i.e. how many tool calls the model issued together. This is
+              *potential* parallelism, not necessarily parallelism that happened.
+  * width_executed -- realized parallelism: the most tool spans that actually overlap
+              in wall-clock time. Requires a concurrent executor (acg/agent.py); on
+              serial traces it is 1, which is the honest reading.
   * total tokens -- input + output summed across all LLM calls (cost-related)
   * wall-clock latency -- per node and for the whole run
   * task outcome
@@ -79,6 +84,8 @@ def build_graph(spans: list[dict]) -> nx.DiGraph:
             input_tokens=_attr(s, T.GEN_AI_USAGE_INPUT_TOKENS, 0) or 0,
             output_tokens=_attr(s, T.GEN_AI_USAGE_OUTPUT_TOKENS, 0) or 0,
             duration_ns=s.get("duration_ns") or 0,
+            start_time_ns=s.get("start_time_ns"),
+            end_time_ns=s.get("end_time_ns"),
             outcome=_attr(s, T.ACG_OUTCOME),
             question=_attr(s, "acg.question"),
             answer=_attr(s, "acg.answer"),
@@ -270,7 +277,8 @@ class ACGMetrics:
     edge_count: int               # dependency edges (includes root->first)
     # structure
     depth: int                    # longest dependency chain, in edges
-    width: int                    # max nodes sharing one dependency level
+    width: int                    # structural/emitted: max nodes sharing one dependency level
+    width_executed: int           # realized: max tool spans overlapping in wall-clock time
     # cost
     input_tokens: int
     output_tokens: int
@@ -286,6 +294,28 @@ class ACGMetrics:
         for k, v in self.tool_breakdown.items():
             d[f"tool_{k}"] = v
         return d
+
+
+def _max_temporal_overlap(intervals: list[tuple]) -> int:
+    """Max number of [start_ns, end_ns] intervals open at the same instant (sweep line).
+
+    This turns tool-span wall-clock times into *executed* parallelism: how many tool
+    calls were genuinely running at once. Intervals that merely touch (one ends exactly
+    as the next starts) do NOT count as overlap -- ends are processed before starts at an
+    equal timestamp. Returns 0 when there are no valid intervals.
+    """
+    events: list[tuple[int, int]] = []
+    for start, end in intervals:
+        if start is None or end is None or end < start:
+            continue
+        events.append((start, 1))     # +1 at start
+        events.append((end, -1))      # -1 at end
+    events.sort(key=lambda e: (e[0], e[1]))   # at a tie, -1 (end) before +1 (start)
+    active = peak = 0
+    for _, delta in events:
+        active += delta
+        peak = max(peak, active)
+    return peak
 
 
 def _levels_from_root(g: nx.DiGraph, root: str) -> dict[str, int]:
@@ -317,6 +347,14 @@ def compute_metrics(g: nx.DiGraph, *, run_id="", task_id="", trace_id="") -> ACG
     else:
         depth = width = 0
 
+    # Executed (realized) parallelism: how many tool spans overlapped in wall-clock time.
+    # On serial traces this is 1 (or 0 with no tools); it exceeds 1 only when the executor
+    # actually ran tool calls concurrently (see cfg.max_tool_workers).
+    width_executed = _max_temporal_overlap([
+        (g.nodes[n].get("start_time_ns"), g.nodes[n].get("end_time_ns"))
+        for n in tool_nodes
+    ])
+
     in_tok = sum(g.nodes[n]["input_tokens"] for n in llm_nodes)
     out_tok = sum(g.nodes[n]["output_tokens"] for n in llm_nodes)
     llm_time = sum(g.nodes[n]["duration_ns"] for n in llm_nodes) / 1e9
@@ -328,7 +366,7 @@ def compute_metrics(g: nx.DiGraph, *, run_id="", task_id="", trace_id="") -> ACG
         run_id=run_id, task_id=task_id, trace_id=trace_id, outcome=outcome or "unknown",
         node_count=len(real), num_llm_calls=len(llm_nodes), num_tool_calls=len(tool_nodes),
         tool_breakdown=dict(tool_breakdown), edge_count=g.number_of_edges(),
-        depth=depth, width=width,
+        depth=depth, width=width, width_executed=width_executed,
         input_tokens=in_tok, output_tokens=out_tok, total_tokens=in_tok + out_tok,
         wall_clock_s=round(wall, 4), llm_time_s=round(llm_time, 4), tool_time_s=round(tool_time, 4),
     )

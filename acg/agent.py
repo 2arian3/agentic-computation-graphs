@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from opentelemetry.trace import SpanKind
@@ -127,45 +128,32 @@ class Agent:
                     ],
                 })
 
+                # Execute this step's emitted tool calls. The model may issue several in
+                # one turn; we run them CONCURRENTLY (up to cfg.max_tool_workers) so that
+                # span wall-clock times reflect real parallelism -- the precondition for
+                # measuring *executed* width honestly (see acg/graph.py). Records come back
+                # in emit order, so the transcript (and thus the run) is byte-reproducible
+                # regardless of which tool finished first.
+                parent_ctx = self.client.context_for(result.span_context)
+                records = self._execute_tool_calls(
+                    list(result.tool_calls), step=step, parent_ctx=parent_ctx,
+                    llm_node_id=result.node_id, run_id=run_id, task_id=task.task_id,
+                )
+
                 step_tool_nodes: list[str] = []
                 finished = False
-                parent_ctx = self.client.context_for(result.span_context)
-                for idx, tc in enumerate(result.tool_calls):
-                    name = tc.function.name
-                    args = TOOLS.parse_arguments(tc.function.arguments)
-                    tool_node_id = f"tool:{step}:{idx}"
-                    with self.tracer.start_as_current_span(
-                        f"execute_tool {name}", context=parent_ctx, kind=SpanKind.INTERNAL
-                    ) as tspan:
-                        tspan.set_attribute(T.ACG_NODE_TYPE, T.NODE_TYPE_TOOL)
-                        tspan.set_attribute(T.ACG_NODE_ID, tool_node_id)
-                        tspan.set_attribute(T.GEN_AI_OPERATION_NAME, "execute_tool")
-                        tspan.set_attribute(T.GEN_AI_TOOL_NAME, name)
-                        tspan.set_attribute(T.GEN_AI_TOOL_CALL_ID, tc.id or "")
-                        tspan.set_attribute(T.ACG_RUN_ID, run_id)
-                        tspan.set_attribute(T.ACG_TASK_ID, task.task_id)
-                        tspan.set_attribute(T.ACG_STEP, step)
-                        tspan.set_attribute(T.ACG_DEPENDS_ON, json.dumps([result.node_id]))
-                        tspan.set_attribute(T.ACG_TOOL_ARGS, json.dumps(args)[:2000])
-
-                        result_obj = TOOLS.execute(name, args, self.corpus, search_top_k=self.cfg.search_top_k)
-                        result_json = json.dumps(result_obj)
-                        tspan.set_attribute(T.ACG_TOOL_RESULT_CHARS, len(result_json))
-                        tspan.add_event("acg.tool.result", {"content": result_json[:8000]})
-
+                for r in records:
                     num_tool += 1
-                    tool_call_names.append(name)
-                    step_tool_nodes.append(tool_node_id)
-
-                    # Feed the tool result back into the transcript.
+                    tool_call_names.append(r["name"])
+                    step_tool_nodes.append(r["tool_node_id"])
+                    # Feed the tool result back into the transcript (emit order).
                     messages.append({
                         "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": result_json,
+                        "tool_call_id": r["tc_id"],
+                        "content": r["result_json"],
                     })
-
-                    if name == TOOLS.FINISH:
-                        answer = str(args.get("answer", "")).strip() or None
+                    if r["is_finish"]:
+                        answer = r["answer"]
                         finished = True
 
                 if finished:
@@ -189,3 +177,87 @@ class Agent:
             total_input_tokens=in_tok, total_output_tokens=out_tok,
             wall_clock_s=wall, tool_call_names=tool_call_names,
         )
+
+    # ------------------------------------------------------------------ #
+    # Tool execution
+    # ------------------------------------------------------------------ #
+    def _execute_tool_calls(
+        self, calls: list, *, step: int, parent_ctx, llm_node_id: str,
+        run_id: str, task_id: str,
+    ) -> list[dict]:
+        """Run one step's emitted tool calls, returning per-call records in EMIT order.
+
+        With cfg.max_tool_workers > 1 and more than one call, the calls run on a thread
+        pool so their spans overlap in wall-clock time when the tools do concurrent work;
+        a single call (or max_tool_workers == 1) runs inline. Records are re-sorted by emit
+        index so the transcript -- and therefore the whole run -- stays reproducible no
+        matter which tool finishes first.
+        """
+        indexed = list(enumerate(calls))
+        workers = min(len(indexed), max(1, self.cfg.max_tool_workers))
+        if workers > 1 and len(indexed) > 1:
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futures = [
+                    ex.submit(
+                        self._execute_one_tool, tc, step=step, idx=idx,
+                        parent_ctx=parent_ctx, llm_node_id=llm_node_id,
+                        run_id=run_id, task_id=task_id,
+                    )
+                    for idx, tc in indexed
+                ]
+                records = [f.result() for f in futures]
+        else:
+            records = [
+                self._execute_one_tool(
+                    tc, step=step, idx=idx, parent_ctx=parent_ctx,
+                    llm_node_id=llm_node_id, run_id=run_id, task_id=task_id,
+                )
+                for idx, tc in indexed
+            ]
+        records.sort(key=lambda r: r["idx"])
+        return records
+
+    def _execute_one_tool(
+        self, tc, *, step: int, idx: int, parent_ctx, llm_node_id: str,
+        run_id: str, task_id: str,
+    ) -> dict:
+        """Execute a single tool call inside its own span and return a plain record.
+
+        Pure with respect to agent state: it touches no shared counters or transcript, so
+        it is safe to call from worker threads. The caller applies the returned records in
+        emit order. Each tool span is parented under the LLM call (llm_node_id) through the
+        explicit parent context, which is what keeps cross-thread parenting correct.
+        """
+        name = tc.function.name
+        args = TOOLS.parse_arguments(tc.function.arguments)
+        tool_node_id = f"tool:{step}:{idx}"
+        with self.tracer.start_as_current_span(
+            f"execute_tool {name}", context=parent_ctx, kind=SpanKind.INTERNAL
+        ) as tspan:
+            tspan.set_attribute(T.ACG_NODE_TYPE, T.NODE_TYPE_TOOL)
+            tspan.set_attribute(T.ACG_NODE_ID, tool_node_id)
+            tspan.set_attribute(T.GEN_AI_OPERATION_NAME, "execute_tool")
+            tspan.set_attribute(T.GEN_AI_TOOL_NAME, name)
+            tspan.set_attribute(T.GEN_AI_TOOL_CALL_ID, tc.id or "")
+            tspan.set_attribute(T.ACG_RUN_ID, run_id)
+            tspan.set_attribute(T.ACG_TASK_ID, task_id)
+            tspan.set_attribute(T.ACG_STEP, step)
+            tspan.set_attribute(T.ACG_DEPENDS_ON, json.dumps([llm_node_id]))
+            tspan.set_attribute(T.ACG_TOOL_ARGS, json.dumps(args)[:2000])
+
+            result_obj = TOOLS.execute(name, args, self.corpus, search_top_k=self.cfg.search_top_k)
+            result_json = json.dumps(result_obj)
+            tspan.set_attribute(T.ACG_TOOL_RESULT_CHARS, len(result_json))
+            tspan.add_event("acg.tool.result", {"content": result_json[:8000]})
+
+        is_finish = name == TOOLS.FINISH
+        answer = (str(args.get("answer", "")).strip() or None) if is_finish else None
+        return {
+            "idx": idx,
+            "tool_node_id": tool_node_id,
+            "tc_id": tc.id,
+            "name": name,
+            "result_json": result_json,
+            "is_finish": is_finish,
+            "answer": answer,
+        }

@@ -84,6 +84,55 @@ def test_tasks_have_gold(cfg):
     assert all(t.answers for t in tasks)
 
 
+# ------------- unit tests: emitted vs executed width (no server) ---------- #
+def _mk_span(node_id, node_type, deps, start_ns, end_ns, **attrs):
+    """A minimal JSONL-style span dict like acg.tracing exports."""
+    a = {T.ACG_NODE_ID: node_id, T.ACG_NODE_TYPE: node_type, T.ACG_DEPENDS_ON: deps}
+    a.update(attrs)
+    dur = (end_ns - start_ns) if (start_ns is not None and end_ns is not None) else None
+    return {
+        "trace_id": "trace-a", "span_id": node_id, "name": node_id,
+        "start_time_ns": start_ns, "end_time_ns": end_ns, "duration_ns": dur,
+        "attributes": a,
+    }
+
+
+def _two_tool_run_spans(t0_start, t0_end, t1_start, t1_end):
+    """One run: root -> llm:0 -> {tool:0:0, tool:0:1}, both emitted in the same turn."""
+    return [
+        _mk_span("run:r", T.NODE_TYPE_AGENT_RUN, [], 0, 1000,
+                 **{T.ACG_OUTCOME: "correct", T.ACG_RUN_ID: "r", T.ACG_TASK_ID: "TX"}),
+        _mk_span("llm:0", T.NODE_TYPE_LLM, ["run:r"], 10, 20,
+                 **{T.GEN_AI_USAGE_INPUT_TOKENS: 100, T.GEN_AI_USAGE_OUTPUT_TOKENS: 20}),
+        _mk_span("tool:0:0", T.NODE_TYPE_TOOL, ["llm:0"], t0_start, t0_end,
+                 **{T.GEN_AI_TOOL_NAME: "search", T.ACG_STEP: 0}),
+        _mk_span("tool:0:1", T.NODE_TYPE_TOOL, ["llm:0"], t1_start, t1_end,
+                 **{T.GEN_AI_TOOL_NAME: "search", T.ACG_STEP: 0}),
+    ]
+
+
+def test_max_temporal_overlap():
+    f = G._max_temporal_overlap
+    assert f([]) == 0
+    assert f([(0, 10)]) == 1
+    assert f([(0, 10), (10, 20)]) == 1           # touching endpoints are not overlap
+    assert f([(0, 10), (5, 15), (6, 7)]) == 3    # triple overlap at t=6..7
+    assert f([(0, 10), (None, 5), (2, 8)]) == 2  # invalid interval skipped
+
+
+def test_width_distinguishes_emitted_from_executed():
+    # Identical STRUCTURE (two tool calls at one dependency level => width 2), but
+    # different wall-clock: overlapping => executed 2; back-to-back => executed 1.
+    m_par = G.compute_metrics(G.build_graph(_two_tool_run_spans(30, 50, 35, 55)))
+    assert m_par.width == 2            # emitted / structural
+    assert m_par.width_executed == 2   # realized parallelism
+
+    m_seq = G.compute_metrics(G.build_graph(_two_tool_run_spans(30, 50, 50, 70)))
+    assert m_seq.width == 2            # same shape...
+    assert m_seq.width_executed == 1   # ...but nothing actually ran concurrently
+    assert "width_executed" in m_par.to_row()   # surfaced for the metrics CSV
+
+
 # --------------------------- live ACG tests ------------------------------- #
 def _assert_valid_acg(g: nx.DiGraph):
     assert g.number_of_nodes() > 0

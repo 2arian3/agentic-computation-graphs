@@ -60,6 +60,12 @@ class Config:
 
     # --- agent loop ---
     max_steps: int = field(default_factory=lambda: _env_i("ACG_MAX_STEPS", 8))
+    # Max tool calls run CONCURRENTLY within one step. The model can emit several tool
+    # calls in a single turn; a truthful width/parallelism measurement requires the
+    # executor to actually run them at once rather than serialize them. Set to 1 to force
+    # serial execution -- required for the clean sampling-vs-serving isolation study (§7),
+    # where keeping a single request in flight makes the trace bit-reproducible.
+    max_tool_workers: int = field(default_factory=lambda: _env_i("ACG_MAX_TOOL_WORKERS", 8))
 
     # --- decode ---
     decode: DecodeParams = field(default_factory=DecodeParams)

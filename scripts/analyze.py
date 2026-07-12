@@ -24,7 +24,7 @@ from acg import graph as G
 
 _METRIC_FIELDS = [
     "node_count", "num_llm_calls", "num_tool_calls",
-    "edge_count", "depth", "width",
+    "edge_count", "depth", "width", "width_executed",
     "total_tokens", "input_tokens", "output_tokens", "wall_clock_s",
 ]
 
