@@ -126,6 +126,24 @@ from *executed-parallel*. Add branch-enabling tools (parallel/map-search, `sub_a
 the harness supports it; the "width≈1" result is partly an executor artifact. **Metric:** real
 concurrency, depth vs width trade, latency (critical-path vs total).
 
+**RESULT — RAN ✅ (executor made concurrent; `width` split into emitted vs `width_executed`;
+`sub_agent` branch tool + 6 branch-requiring tasks; 3 models × {plain,+sub_agent} × 6 × 8 = 288 runs;
+`data/tasks_branch.jsonl`, `scripts/analyze_branch.py`, `traces/branch_*`. Full table in
+[07 §Phase 6](07-experiment-log.md).)**
+- **The "width≈1" result WAS partly an executor artifact — but only partly.** With plain tools models
+  emit parallel batches (4-bit AWQ: 42% of runs, ≤8 calls/turn) yet `width_executed` stays 1, because
+  in-memory `search`/`read` finish too fast to overlap. Genuine executed concurrency (`width_executed`
+  up to 3) appears **only** with the latency-bearing `sub_agent`, and even then in a minority of runs
+  (8% for 7B, 31% for AWQ). So **emitted ≠ executed parallelism**, and "parallelism is rare" must be
+  stated as *executed*.
+- **Models linearize by policy, not by tooling limit.** Offered `sub_agent`, ~50% of 7B/AWQ runs adopt
+  it but invoke sub-agents **one-per-turn** (serial). With the harness now supporting fan-out, the
+  residual linearity is the model's policy — strengthening RQ-N1's non-adaptivity conclusion.
+- **`sub_agent` is a non-monotonic accuracy scaffold** (rescues 4-bit 0.42→0.90; helps 16-bit
+  0.60→0.71; breaks 8-bit 0.81→0.56 via a **tool-protocol breakdown** — a 4th tool destabilized FP8's
+  hermes formatting in 60% of runs). **⇒** width is now a *measured* (not imposed) quantity; the open
+  confound narrows to **model family (RQ-N3)**.
+
 ### RQ-N3 — Do the findings generalize across model families? *(high)*
 Replicate taxonomy + variance + pathologies on ≥2 non-Qwen families (e.g. Llama-3.x,
 Mistral/Ministral) and one **reasoning model**. **Hypothesis:** the *serving* findings (RQ-A1,

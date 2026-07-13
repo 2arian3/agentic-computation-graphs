@@ -4,11 +4,14 @@ A single authoritative record of **every experiment run**, the **model served** 
 **settings**, the **results**, and the **takeaway**. For the *why* behind the questions see
 [05](05-research-questions.md); for the critical framing see [06](06-critical-review-and-directions.md).
 
-**Status (2026-07-12):** instrument built + validated; one narrow domain (tool-using multi-hop
-QA over a fictional 16-doc corpus) characterized across 3 model/precision configs and a
-retrieval-noise sweep; **~1,150 recorded runs** in `traces/`. All original supervisor questions
-answered; a critical-review pivot (RQ-N1) reframed the open question from *corpus* to *agent
-capability*. Nothing has been run on rented GPUs yet.
+**Status (2026-07-13):** instrument built + validated; one narrow domain (tool-using multi-hop
+QA over a fictional 16-doc corpus) characterized across 3 model/precision configs, a retrieval-noise
+sweep, and a **branch-tool matrix (RQ-N2/N8)**; **~1,450 recorded runs** in `traces/`. All original
+supervisor questions answered; RQ-N1 reframed the open question from *corpus* to *agent capability*,
+and **RQ-N2/N8** then showed the linearity is not an executor artifact either — with a concurrent
+executor + a `sub_agent` branch tool + branch-requiring tasks, the models still linearize by policy
+(executed width does exceed 1, but only in a minority of runs). Next confound: **RQ-N3** (a non-Qwen
+family). Nothing has been run on rented GPUs yet.
 
 ---
 
@@ -85,6 +88,57 @@ Each row: **model served · script · trace · settings · result · takeaway.**
 |---|---|---|
 | **5.1 Corpus-noise sweep (RQ-N1)** | 16 near-homophone distractors (`data/distractors.json`) + retrieval-noise knob; 12 × 8 at noise 0/1/2 = **288 runs** → `noise{0,1,2}.jsonl`; `run_noise_sweep.py` | accuracy **0.77 → 0.73 → 0.56** (noise bit hard) but **structure ≈ flat** (width ≈1, nodes flat, *more* linear 0.82→0.91). **Agent does NOT restructure under noise** — it fails by mis-reading a distractor. ⇒ linear structure is **not a clean-corpus artifact**, but is a **rigid, non-adaptive model policy**. |
 
+### Phase 6 — Branch tools & executed parallelism (RQ-N2 / RQ-N8) · models M1, M2, M3
+**Setup.** The executor was fixed to run a step's emitted tool calls **concurrently**
+(`cfg.max_tool_workers`, default 8) and the `width` metric split into **emitted** (structural) vs
+**`width_executed`** (top-level tool spans that actually overlap in wall-clock time). Added an opt-in
+**`sub_agent`** branch tool — a nested, corpus-grounded assistant whose subtree hangs in the same
+trace, so the ACG becomes a real tree — and **6 branch-*requiring* tasks** (`data/tasks_branch.jsonl`:
+"which of the three countries on Orrin has a capital that is coastal / inland / a mountain town / …",
+each needing a per-country sub-chain). Matrix: **3 models × {plain, +sub_agent} × 6 tasks × 8 reps =
+288 runs**, temp 0.7, varied seed, prefix-cache OFF, concurrent executor; `run_experiment.py
+--tasks-file …`, one `*_provenance.json` sidecar per cell. FP8 was served with `--enforce-eager` (a
+MIG cudagraph NVML-assert workaround; recorded in provenance). `scripts/analyze_branch.py` aggregates.
+
+| model | cfg | acc | emit/turn mean/max | exec_w mean/max | %runs exec≥2 | %used sub_agent |
+|---|---|---|---|---|---|---|
+| 7B (16-bit)    | plain | 0.60 | 1.06 / 2 | 1.00 / 1 | 0.00 | – |
+| 7B (16-bit)    | +sub  | 0.71 | 1.17 / 3 | 1.10 / 3 | 0.08 | 0.50 |
+| 14B FP8 (8-bit)| plain | 0.81 | 0.96 / 2 | 0.88 / 1 | 0.00 | – |
+| 14B FP8 (8-bit)| +sub  | 0.56\* | 0.85 / 3 | 0.75 / 3 | 0.02 | 0.06 |
+| 14B AWQ (4-bit)| plain | 0.42 | 2.06 / **8** | 0.73 / 1 | 0.00 | – |
+| 14B AWQ (4-bit)| +sub  | **0.90** | 2.73 / 5 | 1.42 / 3 | **0.31** | 0.52 |
+
+\* **FP8+sub is a tool-protocol breakdown, not a branching result:** 60% of runs emit an unparsed
+`<tool_call>{…}` as message *content* (vs 4% plain), so the loop takes it as the final answer and stops
+(nodes 9.4→4.1). Adding a 4th tool destabilized the 8-bit model's hermes formatting; 7B-sub (0%) and
+AWQ-sub (10%) are unaffected, so the other cells stand.
+
+**Findings.**
+1. **Emitted ≠ executed parallelism (the measurement point).** With plain tools, models *emit* parallel
+   batches (AWQ **42%** of runs, up to **8** calls/turn) but **`width_executed` stays 1** — in-memory
+   `search`/`read` finish too fast to overlap. The concurrent executor is **necessary but not
+   sufficient**. Genuine executed concurrency appears only with the latency-bearing `sub_agent`
+   (nested LLM calls): **exec_w up to 3, in 8% (7B) / 31% (AWQ) of runs** — the first `width_executed>1`
+   in the project. *(A metric bug that keyed "nested" on graph ancestry instead of the `/`-namespaced
+   id had hidden this; fixed in `graph._top_level_tool_nodes`.)*
+2. **Models linearize even when parallelism is available.** Offered `sub_agent`, ~50% of 7B/AWQ runs
+   adopt it, but they mostly invoke sub-agents **one-per-turn** (serial), so real concurrency stays the
+   exception. With the harness now *supporting* fan-out, the residual linearity is the model's
+   **policy**, not a tooling limit — strengthening RQ-N1's non-adaptivity conclusion.
+3. **Emitted parallelism anti-correlates with capability here.** The degenerate 4-bit AWQ emits far more
+   parallel batches (42%, ≤8/turn) than the careful 16-bit (6%) or 8-bit (8%) — high emitted parallelism
+   is **flailing**, not capability.
+4. **`sub_agent` is a non-monotonic accuracy scaffold.** It **rescues** the 4-bit model (0.42→**0.90**),
+   **helps** the 16-bit (0.60→0.71), and **breaks** the 8-bit (0.81→0.56, via tool-protocol failure).
+   Its value is structured decomposition; its risk is tool-schema fragility — both model-specific.
+
+**Verdict (RQ-N2/N8).** With a truly concurrent executor + a branch tool + branch-requiring tasks,
+executed width **does** become non-trivial (>1) — so the earlier `width≈1` was *partly* an executor
+artifact — **but** models still predominantly linearize, and accuracy is dominated by decomposition and
+tool-protocol robustness, not parallelism. "Agents linearize" survives as a **policy** claim, now on a
+harness that no longer forces it.
+
 *(An interim "complex-task re-run" — 8 tasks × 8 = 64 runs, `complex_experiment.jsonl`, 7B,
 acc 0.64 — was produced between phases; it is superseded by 1.1/1.2.)*
 
@@ -100,13 +154,19 @@ acc 0.64 — was produced between phases; it is superseded by 1.1/1.2.)*
 3. **Decision calibration** — the agent mostly finishes when it has the answer; its
    characteristic failure is the **penultimate-hop short-circuit** (100% wrong).
 4. **Cost predictability** — cost (incl. p95 tail) is predictable from cheap task features.
+5. **Emitted ≠ executed parallelism** (RQ-N2/N8, Phase 6). With a concurrent executor, models emit
+   parallel tool batches but near-instant `search`/`read` never overlap; real `width_executed > 1`
+   needs latency-bearing ops (`sub_agent`), and even then appears in a minority of runs. A clean,
+   transferable measurement distinction — and a reason "parallelism is rare" must be stated as
+   *executed*, not *emitted*.
 
 **Provisional (setup-dependent — the structure chapter):**
-5. **Linear-dominant, parallelism-rare, small stable core.** RQ-N1 showed this is **not a clean-
-   corpus artifact** (it survives retrieval noise) — but the reason is **agent non-adaptivity**,
-   and it has **not** been tested against tasks that *require* branching or a truly parallel
-   executor (our executor **serializes** emitted tool calls — verified). Treat as: *"this
-   agent/loop/tool-set linearizes,"* not *"LLM agents linearize,"* until RQ-N2/N8/N3.
+6. **Linear-dominant, parallelism-rare, small stable core.** RQ-N1 showed this is **not a clean-
+   corpus artifact** (survives retrieval noise); **RQ-N2/N8 showed it is not merely an executor
+   artifact** either — given a concurrent executor + a `sub_agent` branch tool + branch-*requiring*
+   tasks, the models *still* predominantly linearize (fan-out is a rarely-taken option, adopted
+   ~50% but used serially). The cause is **agent non-adaptivity** (a fixed policy). Treat as: *"this
+   agent/model-family linearizes by policy,"* not *"LLM agents linearize,"* until **RQ-N3** (non-Qwen).
 
 **The reframed thesis:** *ACG structure is a rigid property of the agent's policy, largely
 decoupled from task difficulty; agents fail by mis-execution, not by adaptive restructuring.*
@@ -128,34 +188,39 @@ decoupled from task difficulty; agents fail by mis-execution, not by adaptive re
 | `noise0/1/2.jsonl` | 7B | 96 ea | 0.77/0.73/0.56 | corpus-noise sweep (RQ-N1) |
 | `qwen14b_fp8.jsonl` | 14B FP8 | 96 | 0.90 | model scaling (RQ-D1) |
 | `qwen14b_awq.jsonl` | 14B AWQ | 96 | 0.41 | 4-bit floor (RQ-D2) |
+| `branch_{7b,14bfp8,14bawq}_{nosub,sub}.jsonl` | 7B / 14B FP8 / 14B AWQ | 48 ea (288) | Phase 6 | branch-tool matrix (RQ-N2/N8); each has a `*_provenance.json` sidecar pinning model/decode/seed/engine-args |
 | `complex_experiment.jsonl` | 7B | 64 | 0.64 | interim complex re-run (superseded) |
 | `single_T*.jsonl` | 7B | 1 ea | — | per-task drawn ACGs |
 
-Analysis scripts (16): `analyze, structure_taxonomy, variance_sources, branch_points,
-stable_core_map, cost_model, decision_analysis, reasoning_viewer, compare_models,
+Analysis scripts (17): `analyze, analyze_branch, structure_taxonomy, variance_sources,
+branch_points, stable_core_map, cost_model, decision_analysis, reasoning_viewer, compare_models,
 run_experiment, run_noise_sweep, run_complex, run_single, determinism_check, draw_graphs,
-smoke_test`.
+smoke_test`. Data/config: `data/tasks_branch.jsonl` (branch tasks), `acg/provenance.py` (run-level
+provenance module).
 
 ---
 
 ## E. Next steps
 
-**Direction (chosen): validity gate → scale, targeting a robust characterization.** RQ-N1's
-verdict shifted the open question from *corpus* to **agent capability/adaptivity**. Order:
+**Direction: the structural chapter is now de-confounded on corpus (RQ-N1), executor, and tools
+(RQ-N2/N8); the remaining confound is model family.** Order:
 
-1. **RQ-N2 + RQ-N8 (the decisive test, on the slice) —** add **branch-*requiring* tasks**
-   (compare/aggregate over N entities) *and* **fix the executor to run tool calls concurrently**
-   + a `parallel_search`/`map` tool. Does the model branch when the task demands it and the
-   harness supports it, or still linearize? *Resolves whether "agents linearize" is a real claim
-   or a tooling limitation.*
-2. **RQ-N3 —** replicate on one **non-Qwen** model (Llama-3.1-8B / Mistral): is non-adaptivity
-   Qwen-specific or general?
+1. ✅ **RQ-N2 + RQ-N8 (done — Phase 6).** Concurrent executor + `width_executed` + a `sub_agent`
+   branch tool + branch-requiring tasks. Result: executed width *can* exceed 1 (so `width≈1` was
+   partly an executor artifact), but models still linearize by policy; `sub_agent` is a
+   non-monotonic accuracy scaffold (rescues 4-bit, helps 16-bit, breaks 8-bit via tool-protocol
+   fragility).
+2. **RQ-N3 (next) —** replicate the branch matrix on one **non-Qwen** family (Llama-3.1-8B /
+   Mistral): is "linearize by policy" Qwen-specific or general? The last big confound; harness ready.
 3. **RQ-N4/N5 —** causal graph (counterfactual ablation) + **waste-headroom** quantification →
    decides whether an optimization contract is justified.
-4. **Gate → Phase 1 (scale):** 50 reps/task on a **realistic corpus** (HotpotQA-with-distractors)
-   across surviving models. **Phase 2 (rented GPUs, gated on N5):** 32B–70B, GPTQ 4-bit recheck,
-   the controller for the two named failure modes, and graph-ensembling.
+4. **Gate → scale:** 50 reps/task on a **realistic, latency-bearing corpus** (HotpotQA-with-
+   distractors; slow retrieval so *emitted* parallelism can translate to *executed*). **Rented GPUs
+   (gated on N5):** 32B–70B, GPTQ 4-bit recheck, controllers for the named failure modes.
 
-**Open engineering caveats to carry forward:** executor serializes parallel calls (fix in N2);
-controlled runs should be **cache-off** for bit-exactness; the cost model's `hops` feature is
-partly circular (needs question-only features); 12 tasks is thin (add tasks / keep CIs).
+**Open engineering caveats to carry forward:** ~~executor serializes parallel calls~~ (fixed in
+Phase 6); executed concurrency is bounded by near-instant corpus tools (needs a slow-tool corpus to
+stress); adding a 4th tool broke FP8's hermes formatting (tool-schema fragility — try a different
+parser / trimmed schema); controlled runs should be **cache-off** for bit-exactness; the cost model's
+`hops` feature is partly circular; task counts are thin (12 canonical / 6 branch — keep CIs); still
+Qwen-only until RQ-N3.

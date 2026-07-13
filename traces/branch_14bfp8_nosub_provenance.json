@@ -1,0 +1,81 @@
+{
+  "experiment": "branch_14bfp8_nosub",
+  "captured_at": "2026-07-12T23:07:42+0000",
+  "host": "afrl-1",
+  "platform": "Linux-5.15.0-185-generic-x86_64-with-glibc2.35",
+  "python": "3.10.12",
+  "git": {
+    "sha": "300de9e2f57e202d48121b70c15da69b3d43c14b",
+    "short_sha": "300de9e",
+    "branch": "concurrent-executor",
+    "dirty": true
+  },
+  "config": {
+    "base_url": "http://localhost:8001/v1",
+    "api_key": "EMPTY",
+    "model": "qwen2.5-14b-fp8",
+    "gen_ai_system": "qwen",
+    "max_steps": 12,
+    "max_tool_workers": 8,
+    "decode": {
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "max_tokens": 1024,
+      "seed": 1234
+    },
+    "corpus_path": "/mnt/agentic-computation-graphs/data/corpus.json",
+    "tasks_path": "/mnt/agentic-computation-graphs/data/tasks.jsonl",
+    "search_top_k": 3,
+    "elicit_reasoning": false,
+    "enable_sub_agent": false,
+    "sub_agent_max_steps": 6
+  },
+  "server": {
+    "base_url": "http://localhost:8001/v1",
+    "models": [
+      "qwen2.5-14b-fp8"
+    ],
+    "docker": {
+      "container": "acg-vllm",
+      "image": "sha256:6d8429e38e3747723ca07ee1b17972e09bb9c51c4032b266f24fb1cc3b22ed8f",
+      "engine_args": [
+        "serve",
+        "--model",
+        "RedHatAI/Qwen2.5-14B-Instruct-FP8-dynamic",
+        "--served-model-name",
+        "qwen2.5-14b-fp8",
+        "--dtype",
+        "auto",
+        "--max-model-len",
+        "4096",
+        "--gpu-memory-utilization",
+        "0.72",
+        "--seed",
+        "1234",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser",
+        "hermes",
+        "--enforce-eager",
+        "--no-enable-prefix-caching"
+      ]
+    }
+  },
+  "run": {
+    "tasks": [
+      "BR01",
+      "BR02",
+      "BR03",
+      "BR04",
+      "BR05",
+      "BR06"
+    ],
+    "reps": 8,
+    "total_runs": 48,
+    "temperature": 0.7,
+    "vary_seed": true,
+    "seed_policy": "varied per run: seed = 1000 + rep (reps 0..7)",
+    "trace_file": "traces/branch_14bfp8_nosub.jsonl",
+    "tasks_file": "data/tasks_branch.jsonl",
+    "max_tool_workers": 8
+  }
+}

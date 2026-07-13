@@ -14,6 +14,8 @@ hf-cache/
 traces/*.jsonl
 traces/*.csv
 traces/*.json
+# ...but DO keep the small run-level provenance sidecars (reproducibility record).
+!traces/*provenance.json
 traces/_*.log
 traces/figures/*.png
 traces/figures/*.html
