@@ -148,12 +148,108 @@ def render_html(meta, steps) -> str:
     return "\n".join(out)
 
 
+def render_png(meta, steps, out_path, *, wrap_w: int = 104, fontsize: float = 8.5) -> str:
+    """Render the same Saw→Reasoned→Decided timeline to a PNG (matplotlib, no browser needed).
+
+    A single-column dark card stack: one card per LLM step with the step's inputs, the model's
+    verbalized reasoning, and the tool call it emitted, then a final-answer banner. Geometry is in
+    line-units (y) / char-units (x) with the figure sized so one text line == one unit.
+    """
+    import textwrap
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+
+    C = {"bg": "#0f1117", "card": "#12151c", "border": "#2a2f3a", "text": "#dfe6ee",
+         "muted": "#7d8797", "saw": "#5ea9ff", "reason": "#c99bff", "decide": "#ffb454",
+         "ok": "#57d98a", "bad": "#ff7a7a"}
+
+    def wrap(s, maxlines):
+        out = []
+        for para in (str(s).replace("\t", " ").splitlines() or [""]):
+            out += (textwrap.wrap(para, wrap_w - 6) or [""])
+        return out[:maxlines] + (["   …(truncated)"] if len(out) > maxlines else [])
+
+    blocks = []
+    for st in steps:
+        saw_lines = []
+        for k, t in st["saw"]:
+            saw_lines += wrap(f"{k}: {t}", 12)
+        r = st["reasoning"] or ""
+        for th in st["thoughts"]:
+            r += (("\n" if r else "") + f'"{th}"')
+        reason_lines = wrap(r or "(no reasoning text — went straight to the tool call)", 18)
+        if st["decisions"]:
+            dec_lines = []
+            for name, args in st["decisions"]:
+                dec_lines += [f"{name}"] + wrap("    " + json.dumps(args, ensure_ascii=False), 8)
+        else:
+            dec_lines = ["final answer:"] + wrap("    " + (st["final"] or ""), 10)
+        blocks.append((st, [("SAW (inputs)", "saw", saw_lines or ["(nothing)"]),
+                            ("REASONED (why)", "reason", reason_lines),
+                            ("DECIDED", "decide", dec_lines)]))
+
+    GAP_SEC, HDR, CARD_PAD, CARD_GAP, TITLE_H = 0.5, 1.6, 0.6, 0.8, 3.2
+
+    def sec_h(lines):
+        return 1.1 + len(lines)
+
+    def block_h(secs):
+        return HDR + sum(sec_h(l) + GAP_SEC for _, _, l in secs) + CARD_PAD
+
+    oc = meta.get("outcome", "?")
+    final_lines = textwrap.wrap(f"Final answer: {meta.get('answer', '')}   [{oc}]", wrap_w) or [""]
+    FINAL_H = len(final_lines) + 1.5
+    total = TITLE_H + sum(block_h(s) + CARD_GAP for _, s in blocks) + FINAL_H
+    unit_in = fontsize * 1.5 / 72.0
+    char_in = fontsize * 0.60 / 72.0
+
+    fig = plt.figure(figsize=((wrap_w + 2) * char_in, total * unit_in), dpi=150)
+    fig.patch.set_facecolor(C["bg"])
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, wrap_w + 2); ax.set_ylim(0, total); ax.invert_yaxis(); ax.axis("off")
+
+    def txt(x, y, s, c, weight="normal", size=fontsize, mono=True):
+        ax.text(x, y, s, color=c, fontsize=size, fontweight=weight, va="top", ha="left",
+                linespacing=1.5, family=("monospace" if mono else "DejaVu Sans"))
+
+    head_c = C["ok"] if oc == "correct" else C["bad"]
+    txt(0.8, 0.4, f"Reasoning trace — {meta.get('task_id', '')}   [{oc}]", head_c, "bold", fontsize + 4, mono=False)
+    for i, ln in enumerate(textwrap.wrap(meta.get("question") or "", wrap_w)[:2]):
+        txt(0.8, 1.9 + i, ln, C["muted"], mono=False)
+
+    y = TITLE_H
+    for st, secs in blocks:
+        h = block_h(secs)
+        ax.add_patch(Rectangle((0.5, y), wrap_w + 1.0, h - 0.2, facecolor=C["card"],
+                               edgecolor=C["border"], linewidth=1.0))
+        txt(1.0, y + 0.4, f"LLM step {st['step']}", C["text"], "bold")
+        txt(wrap_w - 11, y + 0.4, f"{st['in_tok']}→{st['out_tok']} tok", C["muted"])
+        yy = y + HDR
+        for title, ck, lines in secs:
+            txt(1.2, yy, title, C[ck], "bold", fontsize - 0.5)
+            txt(2.2, yy + 1.1, "\n".join(lines), C["text"])
+            yy += sec_h(lines) + GAP_SEC
+        y += h + CARD_GAP
+
+    for i, ln in enumerate(final_lines):
+        txt(0.8, y + 0.2 + i, ln, head_c, "bold", fontsize + 1, mono=False)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, facecolor=C["bg"])
+    plt.close(fig)
+    return str(out_path)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--trace", default="traces/experiment.jsonl")
     ap.add_argument("--task", default=None, help="pick the deepest run of this task")
     ap.add_argument("--run-id", default=None)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--format", choices=["png", "html", "both"], default="both",
+                    help="output format (default both)")
     args = ap.parse_args()
 
     by_trace = G.group_by_trace(G.load_spans(args.trace))
@@ -173,14 +269,18 @@ def main() -> int:
     spans = by_trace[chosen.trace_id]
     meta = G._run_metadata(chosen.graph)
     steps = extract_steps(spans)
-    htmls = render_html(meta, steps)
 
-    out = Path(args.out or f"traces/figures/reasoning_{chosen.task_id}_{chosen.run_id}.html")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(htmls, encoding="utf-8")
+    base = Path(args.out) if args.out else Path(f"traces/figures/reasoning_{chosen.task_id}_{chosen.run_id}")
+    base.parent.mkdir(parents=True, exist_ok=True)
     print(f"run {chosen.run_id} ({chosen.task_id}, {chosen.metrics.node_count} nodes, "
           f"{len(steps)} LLM steps, outcome={meta['outcome']})")
-    print(f"wrote {out}")
+    if args.format in ("html", "both"):
+        p = base.with_suffix(".html")
+        p.write_text(render_html(meta, steps), encoding="utf-8")
+        print(f"wrote {p}")
+    if args.format in ("png", "both"):
+        p = render_png(meta, steps, base.with_suffix(".png"))
+        print(f"wrote {p}")
     return 0
 
 
