@@ -4,14 +4,13 @@ A single authoritative record of **every experiment run**, the **model served** 
 **settings**, the **results**, and the **takeaway**. For the *why* behind the questions see
 [05](05-research-questions.md); for the critical framing see [06](06-critical-review-and-directions.md).
 
-**Status (2026-07-13):** instrument built + validated; one narrow domain (tool-using multi-hop
-QA over a fictional 16-doc corpus) characterized across 3 model/precision configs, a retrieval-noise
-sweep, and a **branch-tool matrix (RQ-N2/N8)**; **~1,450 recorded runs** in `traces/`. All original
-supervisor questions answered; RQ-N1 reframed the open question from *corpus* to *agent capability*,
-and **RQ-N2/N8** then showed the linearity is not an executor artifact either — with a concurrent
-executor + a `sub_agent` branch tool + branch-requiring tasks, the models still linearize by policy
-(executed width does exceed 1, but only in a minority of runs). Next confound: **RQ-N3** (a non-Qwen
-family). Nothing has been run on rented GPUs yet.
+**Status (2026-07-13):** instrument built + validated; one narrow domain (tool-using multi-hop QA over
+a fictional 16-doc corpus) characterized across **4 model/precision configs in 2 families** (Qwen2.5
+7B/14B, Llama-3.1-8B), a retrieval-noise sweep, and a branch-tool matrix; **~1,550 recorded runs** in
+`traces/`. All original supervisor questions answered; the **RQ-N1 (corpus) → RQ-N2/N8 (executor+tools)
+→ RQ-N3 (2nd family)** validity gates are all done, and the structural finding "**agents linearize by
+policy**" survives every de-confound — it now holds across two families. Remaining generalization gaps:
+a reasoning/long-CoT model and a realistic latency-bearing corpus. Nothing has been run on rented GPUs yet.
 
 ---
 
@@ -26,6 +25,12 @@ calling via the **`hermes`** parser. Engine seed 1234.
 | M1 | **Qwen2.5-7B-Instruct** | BF16 (16-bit) | ~15 GB | max-model-len 8192→4096*, gpu-util 0.85→0.72*, cache on/off per-exp | **Baseline / canonical** — most experiments |
 | M2 | **RedHatAI/Qwen2.5-14B-Instruct-FP8-dynamic** | FP8 (8-bit W8A8) | ~14 GB | max-model-len 8192, gpu-util 0.85, cache on | Model scaling + 8-bit precision (RQ-D1) |
 | M3 | **Qwen2.5-14B-Instruct-AWQ** | AWQ (4-bit) | ~9 GB | max-model-len 4096, gpu-util 0.72, cache on | 4-bit quantization floor (RQ-D2) |
+| M4 | **Llama-3.1-8B-Instruct** (NousResearch mirror) | BF16 (16-bit) | ~15 GB | max-model-len 4096, gpu-util 0.80, cache off, **`llama3_json` parser + `tool_chat_template_llama3.1_json.jinja`** | Cross-family replication (RQ-N3) |
+
+**Serving notes (branch phase):** tool parser is **`hermes`** for Qwen (M1–M3) and **`llama3_json`** for
+Llama (M4) — Llama *also* needs `--chat-template tool_chat_template_llama3.1_json.jinja` or it emits no
+tool calls. FP8 (M2) needs **`--enforce-eager`** on this MIG slice (a cudagraph NVML assert otherwise).
+For RQ-N3 the `optirag` co-tenant was stopped, freeing the slice (M4 served uncontended).
 
 \* **Config change mid-project:** the slice was later contended by another project (`optirag`)
 that took port 8000 and ~3.4 GB, so from RQ-A1 onward M1 was re-served on **port 8001** with
@@ -139,6 +144,45 @@ artifact — **but** models still predominantly linearize, and accuracy is domin
 tool-protocol robustness, not parallelism. "Agents linearize" survives as a **policy** claim, now on a
 harness that no longer forces it.
 
+### Phase 7 — Cross-family replication (RQ-N3) · model M4 (Llama-3.1-8B-Instruct, BF16)
+**Setup.** Replicated the branch matrix on a **non-Qwen** family: `NousResearch/Meta-Llama-3.1-8B-Instruct`
+(ungated mirror; no HF token for Meta's gated repo), BF16, served on the now-uncontended slice
+(`--tool-call-parser llama3_json` **plus** `--chat-template tool_chat_template_llama3.1_json.jinja` —
+without the template Llama *describes* tools in prose and emits 0 tool calls → 0% accuracy). Same 6
+branch tasks × {plain, +sub_agent} × 8 reps → `traces/branch_llama31_{nosub,sub}.jsonl`. Per-run
+resilience was added (a serving/tool-protocol error now ends one run as an errored `no_answer` with the
+cause on the root span, instead of crashing the batch).
+
+| family / model | cfg | acc | %err | emit/turn mean/max | %used sub_agent | exec_w max | %fanout |
+|---|---|---|---|---|---|---|---|
+| Qwen2.5-7B (16-bit)  | plain | 0.60 | 0 | 1.06 / 2 | – | 1 | 0.00 |
+| Qwen2.5-7B (16-bit)  | +sub  | 0.71 | 0 | 1.17 / 3 | 0.50 | 3 | 0.08 |
+| **Llama-3.1-8B (16-bit)** | plain | 0.69 | 0 | **1.00 / 1** | – | 1 | 0.00 |
+| **Llama-3.1-8B (16-bit)** | +sub  | 0.52 | **0.10** | 1.29 / 4 | 0.50 | **4** | 0.10 |
+
+**Findings.**
+1. **"Linearize by policy" generalizes beyond Qwen.** Plain Llama-3.1 is the *strictest* linearizer of all
+   eight cells: emit/turn is **exactly 1** in every run (0% parallel emission), clean chains (nodes 9.9,
+   depth 9.9), acc 0.69. A different model family shows the same linear structure ⇒ it is **not a Qwen
+   quirk** but a general property of these instruction-tuned tool-agents.
+2. **`sub_agent` adoption is family-invariant (~50%).** Offered the branch tool, both Qwen-7B and
+   Llama-8B adopt it in exactly **50%** of runs — a strikingly consistent policy across families.
+3. **Llama's parallel sub_agents execute but cannot complete (a serving-stack limit).** The 10% of
+   Llama-sub runs that fan out achieve **real executed concurrency — exec_w up to 4, the highest
+   observed** — but *all five of those runs are exactly the five that error*: vLLM's `llama3_json`
+   template rejects feeding a multi-tool-call turn back to the model (`"only supports single tool-calls
+   at once"`). So on Llama+vLLM executed concurrency is *achievable but not productive*; the limit is the
+   template, not the model.
+4. **`sub_agent`'s accuracy effect is model-specific (now cross-family).** Across all four models it
+   helps two (7B 0.60→0.71, AWQ 0.42→0.90) and hurts two (FP8 0.81→0.56, Llama 0.69→0.52) — not a
+   general win.
+
+**Verdict (RQ-N3).** The structural chapter's core claim — **agents default to linear chains by policy,
+not because the corpus/executor/tools force it** — now holds across **two families and four
+model/precision configs**. Remaining generalization gaps: a **reasoning/long-CoT** model, and a
+**realistic latency-bearing corpus** (so emitted parallelism can translate to productive executed
+parallelism).
+
 *(An interim "complex-task re-run" — 8 tasks × 8 = 64 runs, `complex_experiment.jsonl`, 7B,
 acc 0.64 — was produced between phases; it is superseded by 1.1/1.2.)*
 
@@ -168,8 +212,10 @@ acc 0.64 — was produced between phases; it is superseded by 1.1/1.2.)*
    ~50% but used serially). The cause is **agent non-adaptivity** (a fixed policy). Treat as: *"this
    agent/model-family linearizes by policy,"* not *"LLM agents linearize,"* until **RQ-N3** (non-Qwen).
 
-**The reframed thesis:** *ACG structure is a rigid property of the agent's policy, largely
-decoupled from task difficulty; agents fail by mis-execution, not by adaptive restructuring.*
+**The reframed thesis (now cross-family):** *ACG structure is a rigid property of the agent's policy,
+largely decoupled from task difficulty and stable across model families (Qwen + Llama); agents default
+to linear chains even when a concurrent executor and a branch tool make fan-out available, and fail by
+mis-execution rather than adaptive restructuring.*
 
 ---
 
@@ -189,6 +235,7 @@ decoupled from task difficulty; agents fail by mis-execution, not by adaptive re
 | `qwen14b_fp8.jsonl` | 14B FP8 | 96 | 0.90 | model scaling (RQ-D1) |
 | `qwen14b_awq.jsonl` | 14B AWQ | 96 | 0.41 | 4-bit floor (RQ-D2) |
 | `branch_{7b,14bfp8,14bawq}_{nosub,sub}.jsonl` | 7B / 14B FP8 / 14B AWQ | 48 ea (288) | Phase 6 | branch-tool matrix (RQ-N2/N8); each has a `*_provenance.json` sidecar pinning model/decode/seed/engine-args |
+| `branch_llama31_{nosub,sub}.jsonl` | Llama-3.1-8B | 48 ea (96) | 0.69 / 0.52 | cross-family branch matrix (RQ-N3); provenance sidecars |
 | `complex_experiment.jsonl` | 7B | 64 | 0.64 | interim complex re-run (superseded) |
 | `single_T*.jsonl` | 7B | 1 ea | — | per-task drawn ACGs |
 
@@ -202,25 +249,24 @@ provenance module).
 
 ## E. Next steps
 
-**Direction: the structural chapter is now de-confounded on corpus (RQ-N1), executor, and tools
-(RQ-N2/N8); the remaining confound is model family.** Order:
+**Direction: the structural chapter is now de-confounded on corpus (RQ-N1), executor+tools (RQ-N2/N8),
+and model family (RQ-N3) — the linear-by-policy finding survived all three.** Order:
 
-1. ✅ **RQ-N2 + RQ-N8 (done — Phase 6).** Concurrent executor + `width_executed` + a `sub_agent`
-   branch tool + branch-requiring tasks. Result: executed width *can* exceed 1 (so `width≈1` was
-   partly an executor artifact), but models still linearize by policy; `sub_agent` is a
-   non-monotonic accuracy scaffold (rescues 4-bit, helps 16-bit, breaks 8-bit via tool-protocol
-   fragility).
-2. **RQ-N3 (next) —** replicate the branch matrix on one **non-Qwen** family (Llama-3.1-8B /
-   Mistral): is "linearize by policy" Qwen-specific or general? The last big confound; harness ready.
-3. **RQ-N4/N5 —** causal graph (counterfactual ablation) + **waste-headroom** quantification →
+1. ✅ **RQ-N2 + RQ-N8 (done — Phase 6).** Concurrent executor + `width_executed` + a `sub_agent` branch
+   tool + branch-requiring tasks. Executed width *can* exceed 1 (so `width≈1` was partly an executor
+   artifact), but models still linearize by policy; `sub_agent` is a non-monotonic accuracy scaffold.
+2. ✅ **RQ-N3 (done — Phase 7).** Replicated on **Llama-3.1-8B** (2nd family): linearizes even more
+   strictly than Qwen (plain emit/turn ≡ 1); `sub_agent` adoption ~50% (family-invariant); its parallel
+   fan-out *executes* (exec_w up to 4) but can't complete on vLLM's `llama3_json` template. Not a Qwen quirk.
+3. **RQ-N4/N5 (next) —** causal graph (counterfactual ablation) + **waste-headroom** quantification →
    decides whether an optimization contract is justified.
-4. **Gate → scale:** 50 reps/task on a **realistic, latency-bearing corpus** (HotpotQA-with-
-   distractors; slow retrieval so *emitted* parallelism can translate to *executed*). **Rented GPUs
-   (gated on N5):** 32B–70B, GPTQ 4-bit recheck, controllers for the named failure modes.
+4. **Also: a reasoning/long-CoT model** (very different token/graph profile) + a **realistic,
+   latency-bearing corpus** (HotpotQA-with-distractors; slow retrieval so *emitted* parallelism can
+   translate to *productive executed* parallelism). **Rented GPUs (gated on N5):** 32B–70B, etc.
 
-**Open engineering caveats to carry forward:** ~~executor serializes parallel calls~~ (fixed in
-Phase 6); executed concurrency is bounded by near-instant corpus tools (needs a slow-tool corpus to
-stress); adding a 4th tool broke FP8's hermes formatting (tool-schema fragility — try a different
-parser / trimmed schema); controlled runs should be **cache-off** for bit-exactness; the cost model's
-`hops` feature is partly circular; task counts are thin (12 canonical / 6 branch — keep CIs); still
-Qwen-only until RQ-N3.
+**Open engineering caveats to carry forward:** ~~executor serializes parallel calls~~ (fixed, Phase 6);
+executed concurrency is bounded by near-instant corpus tools (needs a slow-tool corpus to stress);
+adding a 4th tool broke FP8's hermes formatting and Llama can't feed multi-tool-call turns back to the
+model (tool-schema/template fragility); per-run resilience now records serving errors instead of
+crashing a batch; controlled runs should be **cache-off** for bit-exactness; the cost model's `hops`
+feature is partly circular; task counts are thin (12 canonical / 6 branch — keep CIs).

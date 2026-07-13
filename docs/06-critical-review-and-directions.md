@@ -150,6 +150,20 @@ Mistral/Ministral) and one **reasoning model**. **Hypothesis:** the *serving* fi
 precision) replicate; the *structure/pathology rates* differ; reasoning models produce deep
 CoT-heavy nodes and possibly fewer short-circuits. **Metric:** which findings are invariant.
 
+**RESULT — RAN ✅ (1st non-Qwen family: Llama-3.1-8B-Instruct BF16, branch matrix × {plain,+sub_agent}
+× 6 tasks × 8 reps; `traces/branch_llama31_*`. Full table in [07 §Phase 7](07-experiment-log.md).)**
+- **The core structural claim generalizes.** Plain Llama-3.1 is the *strictest* linearizer observed —
+  emit/turn ≡ 1 (0% parallel emission), clean chains — so **"linearize by policy" is not a Qwen quirk**;
+  it holds across two families and four model/precision configs.
+- **`sub_agent` adoption is family-invariant (~50%)**, and its accuracy effect stays model-specific
+  (helps 7B/AWQ, hurts FP8/Llama). Llama's fan-out *does* execute (real exec_w up to 4) but every such
+  run then errors — vLLM's `llama3_json` template can't feed a multi-tool-call turn back — so executed
+  concurrency is *achievable but not productive* on this stack (a serving limit, not a model one).
+- **Still open:** a **reasoning/long-CoT** model (expected to have a very different token/graph profile)
+  and a realistic latency-bearing corpus. But the two-family agreement makes the structural chapter
+  robust enough to write up. **⇒** the last cheap validity gate is closed; the next fork is **RQ-N4/N5**
+  (is there waste worth optimizing?).
+
 ### RQ-N4 — A CAUSAL graph, not a transcript-order graph. *(high, novel)*
 Build the true dependency graph by **counterfactual ablation**: remove each read/search from
 the context and re-run the final answer step — does the answer change? Load-bearing nodes

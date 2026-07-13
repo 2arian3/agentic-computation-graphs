@@ -87,6 +87,7 @@ def build_graph(spans: list[dict]) -> nx.DiGraph:
             start_time_ns=s.get("start_time_ns"),
             end_time_ns=s.get("end_time_ns"),
             outcome=_attr(s, T.ACG_OUTCOME),
+            error=_attr(s, "acg.error"),
             question=_attr(s, "acg.question"),
             answer=_attr(s, "acg.answer"),
             task_id=_attr(s, T.ACG_TASK_ID),

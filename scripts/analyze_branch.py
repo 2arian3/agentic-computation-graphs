@@ -23,9 +23,10 @@ from acg import tracing as TR
 
 # (model_tag, precision label) in report order; configs are off/on for sub_agent.
 MODELS = [
-    ("7b", "7B BF16 (16-bit)"),
-    ("14bfp8", "14B FP8 (8-bit)"),
-    ("14bawq", "14B AWQ (4-bit)"),
+    ("7b", "Qwen2.5-7B (16-bit)"),
+    ("14bfp8", "Qwen2.5-14B FP8 (8-bit)"),
+    ("14bawq", "Qwen2.5-14B AWQ (4-bit)"),
+    ("llama31", "Llama-3.1-8B (16-bit)"),
 ]
 CONFIGS = [("nosub", "plain"), ("sub", "+sub_agent")]
 TRACE_DIR = Path("traces")
@@ -65,9 +66,11 @@ def _cell_stats(trace: Path) -> dict | None:
     emit = [_max_calls_per_turn(r.graph) for r in runs]   # honest emitted parallelism
     execd = [r.metrics.width_executed for r in runs]
     subs = [_top_level_subagents(r.graph) for r in runs]
+    errored = sum(bool(r.graph.nodes[G.find_root(r.graph)].get("error")) for r in runs)
     return {
         "n": n,
         "accuracy": round(acc, 3),
+        "pct_runs_errored": round(errored / n, 3),   # serving/tool-protocol failures (e.g. parallel-call reject)
         "emit_per_turn_mean": round(st.mean(emit), 2),
         "emit_per_turn_max": max(emit),
         "pct_runs_emit_parallel": round(sum(e >= 2 for e in emit) / n, 3),
@@ -106,7 +109,7 @@ def main() -> int:
             out[f"{tag}_{label}"] = {"model": prec, "config": cfg_name,
                                      "served": _served_model(tag, label), **s}
             rows.append([
-                prec, cfg_name, s["n"], f'{s["accuracy"]:.2f}',
+                prec, cfg_name, s["n"], f'{s["accuracy"]:.2f}', f'{s["pct_runs_errored"]:.2f}',
                 f'{s["emit_per_turn_mean"]:.2f}/{s["emit_per_turn_max"]}',
                 f'{s["pct_runs_emit_parallel"]:.2f}',
                 f'{s["exec_width_mean"]:.2f}/{s["exec_width_max"]}',
@@ -115,7 +118,7 @@ def main() -> int:
                 f'{s["nodes_mean"]:.1f}', f'{s["depth_mean"]:.1f}',
             ])
 
-    headers = ["model", "config", "n", "acc", "emit/turn mean/max", "%emit_par",
+    headers = ["model", "config", "n", "acc", "%err", "emit/turn mean/max", "%emit_par",
                "exec_w mean/max", "%fanout(exec>=2)", "%used_subagent", "nodes", "depth"]
     print("\n===============  RQ-N2/N8: branching vs model capability & tool availability  ===============\n")
     if tabulate:

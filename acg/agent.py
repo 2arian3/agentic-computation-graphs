@@ -126,10 +126,18 @@ class Agent:
             depends_on = [root_node_id]   # what the next LLM call consumes
             step = 0
             for step in range(self.cfg.max_steps):
-                result = self.client.chat(
-                    messages, tool_schemas,
-                    step=step, depends_on=depends_on, run_id=run_id, task_id=task.task_id,
-                )
+                try:
+                    result = self.client.chat(
+                        messages, tool_schemas,
+                        step=step, depends_on=depends_on, run_id=run_id, task_id=task.task_id,
+                    )
+                except Exception as e:
+                    # A serving/tool-protocol error (e.g. a model+parser that rejects
+                    # parallel tool calls) ends THIS run cleanly rather than crashing the
+                    # whole batch. The run is recorded as no_answer with the cause on the root.
+                    root.set_attribute("acg.error", f"{type(e).__name__}: {e}"[:400])
+                    answer = None
+                    break
                 num_llm += 1
                 in_tok += result.input_tokens
                 out_tok += result.output_tokens
@@ -157,10 +165,15 @@ class Agent:
                 # in emit order, so the transcript (and thus the run) is byte-reproducible
                 # regardless of which tool finished first.
                 parent_ctx = self.client.context_for(result.span_context)
-                records = self._execute_tool_calls(
-                    list(result.tool_calls), step=step, parent_ctx=parent_ctx,
-                    llm_node_id=result.node_id, run_id=run_id, task_id=task.task_id,
-                )
+                try:
+                    records = self._execute_tool_calls(
+                        list(result.tool_calls), step=step, parent_ctx=parent_ctx,
+                        llm_node_id=result.node_id, run_id=run_id, task_id=task.task_id,
+                    )
+                except Exception as e:
+                    root.set_attribute("acg.error", f"tool: {type(e).__name__}: {e}"[:400])
+                    answer = None
+                    break
 
                 step_tool_nodes: list[str] = []
                 finished = False
