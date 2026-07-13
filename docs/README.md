@@ -12,14 +12,17 @@ Implements Month 1 + first Month 2 of the [RA proposal](https://app.notion.com/p
 | [05 — Research questions](05-research-questions.md) | Scoped RQs (incl. the 3 supervisor questions) with hypotheses, experiments, metrics, preliminary answers, and what needs bigger GPUs |
 | [06 — Critical review & directions](06-critical-review-and-directions.md) | Skeptical assessment: threats to validity (are we measuring the scaffold?), robust-vs-provisional findings, new RQs (N1–N9), obstacles, and the validity-gate recommendation before scaling |
 | [**07 — Experiment log (complete record)**](07-experiment-log.md) | **The clear observation of everything done:** every experiment in detail — model served, settings, results, takeaway — plus the serving-config table, consolidated findings, data-artifact index, and next steps |
+| [**08 — Findings & RQ answers (living summary)**](08-findings.md) | **The scoreboard:** every RQ with its answer, all findings in data tables, robust-vs-provisional split, and open questions. Kept up to date as experiments run. |
 
-**Read [07 — Experiment log](07-experiment-log.md) for the full "what we've done till now" picture.**
-Start at the top-level [../README.md](../README.md) for a one-page overview. All docs are kept in
-sync with the code at `/mnt/agentic-computation-graphs`.
+**Read [08 — Findings](08-findings.md) for the scoreboard of answers, and [07 — Experiment log](07-experiment-log.md)
+for the full chronological "what we've done" picture.** Start at the top-level [../README.md](../README.md)
+for a one-page overview. All docs are kept in sync with the code at `/mnt/agentic-computation-graphs`.
 
-**Status at a glance (2026-07-12):** instrument built & validated; **~1,150 runs** across
-**3 serving configs** — Qwen2.5-7B (BF16), Qwen2.5-14B (FP8, 8-bit), Qwen2.5-14B (AWQ, 4-bit) —
-all on one 24 GB MIG slice via vLLM. All 3 supervisor questions answered (variance = sampling≫KV
-cache≫batching; structure = linear-dominant not branch/parallel; reasoning captured). Precision:
-8-bit lossless, 4-bit collapses. Validity gate RQ-N1 done → pivot to **agent capability**
-(RQ-N2/N8/N3) next. Not yet on rented GPUs.
+**Status at a glance (2026-07-13):** instrument built & validated; **~1,550 runs** across **4 model
+configs in 2 families** — Qwen2.5-7B (BF16), Qwen2.5-14B (FP8, 8-bit), Qwen2.5-14B (AWQ, 4-bit),
+Llama-3.1-8B (BF16) — all on one 24 GB MIG slice via vLLM. All 3 supervisor questions answered
+(variance = sampling≫KV cache≫batching; structure = linear-dominant not branch/parallel; reasoning
+captured). Precision: 8-bit lossless, 4-bit collapses. Validity gates RQ-N1 (corpus), RQ-N2/N8
+(executor+tools), RQ-N3 (2nd family) all done — **"agents linearize by policy" survives every
+de-confound and holds across two families.** Next: RQ-N4/N5 (waste headroom / optimization gate).
+Not yet on rented GPUs.
