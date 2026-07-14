@@ -19,6 +19,8 @@ traces/*.json
 traces/_*.log
 traces/figures/*.png
 traces/figures/*.html
+# per-run traces written by the web dashboard
+traces/webapp/
 
 # local env
 .env

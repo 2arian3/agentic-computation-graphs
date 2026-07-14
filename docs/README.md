@@ -13,6 +13,7 @@ Implements Month 1 + first Month 2 of the [RA proposal](https://app.notion.com/p
 | [06 — Critical review & directions](06-critical-review-and-directions.md) | Skeptical assessment: threats to validity (are we measuring the scaffold?), robust-vs-provisional findings, new RQs (N1–N9), obstacles, and the validity-gate recommendation before scaling |
 | [**07 — Experiment log (complete record)**](07-experiment-log.md) | **The clear observation of everything done:** every experiment in detail — model served, settings, results, takeaway — plus the serving-config table, consolidated findings, data-artifact index, and next steps |
 | [**08 — Findings & RQ answers (living summary)**](08-findings.md) | **The scoreboard:** every RQ with its answer, all findings in data tables, robust-vs-provisional split, and open questions. Kept up to date as experiments run. |
+| [09 — Web dashboard architecture](09-webapp-architecture.md) | The `webapp/` experiment dashboard: analysis of the existing pipeline, how the UI maps onto it, and why streaming needs no change to the agent. See [`../webapp/README.md`](../webapp/README.md) to install/run. |
 
 **Read [08 — Findings](08-findings.md) for the scoreboard of answers, and [07 — Experiment log](07-experiment-log.md)
 for the full chronological "what we've done" picture.** Start at the top-level [../README.md](../README.md)

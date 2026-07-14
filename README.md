@@ -18,6 +18,13 @@ much does the graph change from run to run, and what stays stable?*
 > [Results so far](docs/03-results.md) ·
 > [Next steps](docs/04-next-steps.md)
 
+> **🖥️ Interactive dashboard.** [`webapp/`](webapp/) is a React + FastAPI app that runs
+> experiments and makes every stage observable — live ACG construction, retrieval scores,
+> reasoning, tools, sub-agents, metrics, history, and a document manager. It reuses this
+> pipeline unchanged (streaming via an extra OTel span processor) and can **replay archived
+> traces with the model server down**. Run it with `webapp/run.sh` → http://localhost:8100.
+> See [`webapp/README.md`](webapp/README.md) and [`docs/09`](docs/09-webapp-architecture.md).
+
 ---
 
 ## What's here (and the first results)
