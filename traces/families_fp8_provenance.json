@@ -1,0 +1,122 @@
+{
+  "experiment": "families_fp8",
+  "captured_at": "2026-07-22T05:55:00+0000",
+  "host": "acg",
+  "platform": "Linux-5.15.0-176-generic-x86_64-with-glibc2.35",
+  "python": "3.10.12",
+  "git": {
+    "sha": "af749ff7c8c33691c97cf576343659e562749f9c",
+    "short_sha": "af749ff",
+    "branch": "main",
+    "dirty": true
+  },
+  "config": {
+    "base_url": "http://localhost:8000/v1",
+    "api_key": "EMPTY",
+    "model": "qwen2.5-14b-instruct-fp8",
+    "gen_ai_system": "qwen",
+    "max_steps": 12,
+    "max_tool_workers": 8,
+    "decode": {
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "max_tokens": 1024,
+      "seed": 1234
+    },
+    "corpus_path": "/home/ubuntu/agentic-computation-graphs/data/corpus.json",
+    "tasks_path": "/home/ubuntu/agentic-computation-graphs/data/tasks.jsonl",
+    "search_top_k": 3,
+    "elicit_reasoning": false,
+    "enable_sub_agent": false,
+    "sub_agent_max_steps": 6,
+    "extra_tools": [
+      "calculator",
+      "compare",
+      "verify_claim",
+      "decompose"
+    ]
+  },
+  "server": {
+    "base_url": "http://localhost:8000/v1",
+    "models": [
+      "qwen2.5-14b-instruct-fp8"
+    ],
+    "docker": {
+      "container": "acg-vllm",
+      "image": "sha256:e4f88a835143cd22aee2397a26ec6bb80b3a4a6fe0c882bcbc63822904766089",
+      "engine_args": [
+        "serve",
+        "--model",
+        "RedHatAI/Qwen2.5-14B-Instruct-FP8-dynamic",
+        "--served-model-name",
+        "qwen2.5-14b-instruct-fp8",
+        "--dtype",
+        "auto",
+        "--max-model-len",
+        "8192",
+        "--gpu-memory-utilization",
+        "0.85",
+        "--seed",
+        "1234",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser",
+        "hermes",
+        "--enforce-eager",
+        "--no-enable-prefix-caching"
+      ]
+    }
+  },
+  "run": {
+    "tasks": [
+      "G001",
+      "G002",
+      "G003",
+      "G004",
+      "G005",
+      "G006",
+      "G007",
+      "G008",
+      "G009",
+      "G010",
+      "G011",
+      "G012",
+      "G013",
+      "G014",
+      "G015",
+      "G016",
+      "G017",
+      "G018",
+      "G019",
+      "G020",
+      "G021",
+      "G022",
+      "G023",
+      "G024",
+      "G025",
+      "G026",
+      "G027",
+      "G028",
+      "G029",
+      "G030",
+      "G031",
+      "G032",
+      "G033",
+      "G034",
+      "G035",
+      "G036",
+      "G037",
+      "G038",
+      "G039",
+      "G040"
+    ],
+    "reps": 6,
+    "total_runs": 240,
+    "temperature": 0.7,
+    "vary_seed": true,
+    "seed_policy": "varied per run: seed = 1000 + rep (reps 0..5)",
+    "trace_file": "traces/families_fp8.jsonl",
+    "tasks_file": "data/tasks_families.jsonl",
+    "corpus_file": "data/corpus_large.json",
+    "max_tool_workers": 8
+  }
+}

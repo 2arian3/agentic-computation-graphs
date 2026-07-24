@@ -70,6 +70,10 @@ def build_config(req: dict[str, Any]) -> Config:
         cfg.enable_sub_agent = bool(req["enable_sub_agent"])
     if req.get("sub_agent_max_steps") is not None:
         cfg.sub_agent_max_steps = int(req["sub_agent_max_steps"])
+    # Extended tool alphabet: Config() already reads ACG_EXTRA_TOOLS from the env; a request
+    # may additionally override it (list of tool names).
+    if req.get("extra_tools") is not None:
+        cfg.extra_tools = tuple(req["extra_tools"])
     return cfg
 
 
@@ -157,7 +161,9 @@ def run_live(run_id: str, req: dict[str, Any], on_event) -> dict[str, Any]:
         T.configure_tracing(trace_file)
         attach_streaming_processor()
 
-        corpus = Corpus.load(cfg.corpus_path, paths.DISTRACTORS_PATH)
+        # Use the app's configured corpus path (env-overridable → enriched benchmark).
+        # Corpus.load honors ACG_RETRIEVAL (overlap|bm25) from the environment.
+        corpus = Corpus.load(paths.CORPUS_PATH, paths.DISTRACTORS_PATH)
         if req.get("noise"):
             corpus.noise = int(req["noise"])
 
@@ -235,4 +241,5 @@ def _public_config(cfg: Config) -> dict[str, Any]:
         "elicit_reasoning": cfg.elicit_reasoning,
         "enable_sub_agent": cfg.enable_sub_agent,
         "sub_agent_max_steps": cfg.sub_agent_max_steps,
+        "extra_tools": list(cfg.extra_tools),
     }

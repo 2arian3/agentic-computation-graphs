@@ -92,6 +92,15 @@ class Config:
     # spawn sub_agents, so nesting is exactly one level deep).
     sub_agent_max_steps: int = field(default_factory=lambda: _env_i("ACG_SUB_AGENT_MAX_STEPS", 6))
 
+    # --- extended tool alphabet (richer task families) ---
+    # Comma-separated opt-in EXT tools that induce structural diversity without changing the
+    # loop: calculator, compare, verify_claim, decompose (and sub_agent). Empty by default so
+    # the canonical 3-tool experiments are byte-for-byte unchanged. e.g.
+    #   ACG_EXTRA_TOOLS=calculator,compare,verify_claim,decompose
+    extra_tools: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            t for t in _env("ACG_EXTRA_TOOLS", "").replace(" ", "").split(",") if t))
+
     def to_dict(self) -> dict:
         d = asdict(self)
         d["corpus_path"] = str(self.corpus_path)

@@ -4,9 +4,10 @@ import { useTheme } from "./state/theme";
 import Dashboard from "./views/Dashboard";
 import Documents from "./views/Documents";
 import History from "./views/History";
+import Families from "./views/Families";
 import type { HistoryEntry } from "./api/types";
 
-type View = "dashboard" | "documents" | "history";
+type View = "dashboard" | "documents" | "history" | "families";
 
 export interface Endpoint {
   baseUrl: string;
@@ -47,6 +48,7 @@ export default function App() {
   const nav: { id: View; icon: string; label: string }[] = [
     { id: "dashboard", icon: "◈", label: "Experiment" },
     { id: "documents", icon: "▤", label: "Documents" },
+    { id: "families", icon: "⊞", label: "Families" },
     { id: "history", icon: "◷", label: "History" },
   ];
 
@@ -91,6 +93,7 @@ export default function App() {
           />
         )}
         {view === "documents" && <Documents />}
+        {view === "families" && <Families />}
         {view === "history" && (
           <History
             onRerun={(entry) => {

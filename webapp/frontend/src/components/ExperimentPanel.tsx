@@ -78,6 +78,21 @@ export default function ExperimentPanel({ serverUp, prefill, onPrefillConsumed, 
 
   const set = (patch: Partial<RunConfig>) => setCfg((c) => (c ? { ...c, ...patch } : c));
   const selectedPreset = useMemo(() => presets.find((p) => p.task_id === taskId), [presets, taskId]);
+
+  // Group the task picker by family (falls back to the multi-hop/branching group).
+  const familyGroups = useMemo(() => {
+    const order = [
+      "linear_bridge", "numeric_diff", "counting", "fan_out_superlative", "unanswerable",
+      "constraint_satisfaction", "conditional", "multi-hop", "branching",
+    ];
+    const present = Array.from(new Set(presets.map((p) => p.family || p.group)));
+    return [...order.filter((g) => present.includes(g)), ...present.filter((g) => !order.includes(g))];
+  }, [presets]);
+
+  // Family filter — lets the task list jump straight to one family instead of scrolling a
+  // cramped native <select> popup (which only shows a few rows at a time on some browsers).
+  const [familyFilter, setFamilyFilter] = useState<string>("all");
+  const visibleGroups = familyFilter === "all" ? familyGroups : familyGroups.filter((g) => g === familyFilter);
   const running = state.status === "running";
 
   if (!cfg) return <Card title="Experiment"><div className="empty">Loading configuration…</div></Card>;
@@ -303,10 +318,30 @@ export default function ExperimentPanel({ serverUp, prefill, onPrefillConsumed, 
         </div>
         {promptMode === "preset" ? (
           <>
-            <select value={taskId} onChange={(e) => setTaskId(e.target.value)}>
-              {["multi-hop", "branching"].map((group) => (
-                <optgroup key={group} label={group}>
-                  {presets.filter((p) => p.group === group).map((p) => (
+            <select
+              value={familyFilter}
+              onChange={(e) => {
+                const fam = e.target.value;
+                setFamilyFilter(fam);
+                const vis = fam === "all" ? presets : presets.filter((p) => (p.family || p.group) === fam);
+                if (vis.length && !vis.some((p) => p.task_id === taskId)) setTaskId(vis[0].task_id);
+              }}
+              title="Filter tasks by family"
+              style={{ marginBottom: 8 }}
+            >
+              <option value="all">▾ all families ({presets.length} tasks)</option>
+              {familyGroups.map((g) => (
+                <option key={g} value={g}>
+                  {g} ({presets.filter((p) => (p.family || p.group) === g).length})
+                </option>
+              ))}
+            </select>
+            {/* size makes this a scrollable list box (every task reachable) instead of a
+                native popup that only shows a few rows. */}
+            <select value={taskId} onChange={(e) => setTaskId(e.target.value)} size={12}>
+              {visibleGroups.map((group) => (
+                <optgroup key={group} label={`${group} (${presets.filter((p) => (p.family || p.group) === group).length})`}>
+                  {presets.filter((p) => (p.family || p.group) === group).map((p) => (
                     <option key={p.task_id} value={p.task_id}>
                       {p.task_id} · {p.hops}-hop · {p.question.slice(0, 46)}…
                     </option>

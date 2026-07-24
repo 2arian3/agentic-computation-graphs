@@ -1,0 +1,81 @@
+{
+  "experiment": "mas",
+  "captured_at": "2026-07-22T06:56:22+0000",
+  "host": "acg",
+  "platform": "Linux-5.15.0-176-generic-x86_64-with-glibc2.35",
+  "python": "3.10.12",
+  "git": {
+    "sha": "af749ff7c8c33691c97cf576343659e562749f9c",
+    "short_sha": "af749ff",
+    "branch": "main",
+    "dirty": true
+  },
+  "config": {
+    "base_url": "http://localhost:8000/v1",
+    "api_key": "EMPTY",
+    "model": "qwen2.5-7b-instruct",
+    "gen_ai_system": "qwen",
+    "max_steps": 12,
+    "max_tool_workers": 8,
+    "decode": {
+      "temperature": 0.7,
+      "top_p": 0.95,
+      "max_tokens": 1024,
+      "seed": 1234
+    },
+    "corpus_path": "/home/ubuntu/agentic-computation-graphs/data/corpus.json",
+    "tasks_path": "/home/ubuntu/agentic-computation-graphs/data/tasks.jsonl",
+    "search_top_k": 3,
+    "elicit_reasoning": false,
+    "enable_sub_agent": true,
+    "sub_agent_max_steps": 6,
+    "extra_tools": [
+      "compare",
+      "decompose"
+    ]
+  },
+  "server": {
+    "base_url": "http://localhost:8000/v1",
+    "models": [
+      "qwen2.5-7b-instruct"
+    ],
+    "docker": {
+      "container": "acg-vllm",
+      "image": "sha256:e4f88a835143cd22aee2397a26ec6bb80b3a4a6fe0c882bcbc63822904766089",
+      "engine_args": [
+        "serve",
+        "--model",
+        "Qwen/Qwen2.5-7B-Instruct",
+        "--served-model-name",
+        "qwen2.5-7b-instruct",
+        "--dtype",
+        "auto",
+        "--max-model-len",
+        "8192",
+        "--gpu-memory-utilization",
+        "0.85",
+        "--seed",
+        "1234",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser",
+        "hermes"
+      ]
+    }
+  },
+  "run": {
+    "tasks": [
+      "G013",
+      "G015",
+      "G017"
+    ],
+    "reps": 5,
+    "total_runs": 15,
+    "temperature": 0.7,
+    "vary_seed": true,
+    "seed_policy": "varied per run: seed = 1000 + rep (reps 0..4)",
+    "trace_file": "traces/mas.jsonl",
+    "tasks_file": "data/tasks_families.jsonl",
+    "corpus_file": "data/corpus_large.json",
+    "max_tool_workers": 8
+  }
+}

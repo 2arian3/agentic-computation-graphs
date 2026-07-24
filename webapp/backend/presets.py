@@ -69,6 +69,17 @@ def prompt_presets() -> list[dict[str, Any]]:
     for path, group in ((paths.TASKS_PATH, "multi-hop"), (paths.TASKS_BRANCH_PATH, "branching")):
         if not path.exists():
             continue
+        # Preserve the per-task 'family' label (present in tasks_families.jsonl) so the UI
+        # can group the picker by family rather than one long flat list.
+        fam_of: dict[str, str] = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                try:
+                    d = json.loads(line)
+                    if d.get("family"):
+                        fam_of[d.get("task_id")] = d["family"]
+                except json.JSONDecodeError:
+                    pass
         for t in load_tasks(path):
             out.append({
                 "task_id": t.task_id,
@@ -77,6 +88,7 @@ def prompt_presets() -> list[dict[str, Any]]:
                 "hops": t.hops,
                 "supporting": t.supporting or [],
                 "group": group,
+                "family": fam_of.get(t.task_id, group),
                 "branch": group == "branching",
             })
     return out

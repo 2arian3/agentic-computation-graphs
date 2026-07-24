@@ -62,6 +62,16 @@ SUB_AGENT_HINT = (
     "and `finish`."
 )
 
+# Appended when any non-sub_agent EXT tool is enabled (calculator/compare/verify_claim/
+# decompose). Tells the model the capabilities exist; whether it uses them is the measurement.
+EXTRA_TOOLS_HINT = (
+    "\n\nYou also have helper tools: `decompose` to record a plan before acting, `calculator` "
+    "for any arithmetic or date math, `compare` to pick the max/min or count/sum over values you "
+    "have gathered, and `verify_claim` to check a fact against the documents before you finish. "
+    "Use them when the question calls for planning, computation, aggregation over several "
+    "entities, or verification -- otherwise ignore them."
+)
+
 # A nested sub_agent researches ONE sub-question and returns a short answer.
 SUB_AGENT_SYSTEM_PROMPT = (
     "You are a research assistant answering ONE focused sub-question using ONLY a private, "
@@ -101,8 +111,15 @@ class Agent:
         tool_schemas = TOOLS.tool_schemas(
             self.cfg.search_top_k, self.cfg.elicit_reasoning,
             include_sub_agent=self.cfg.enable_sub_agent,
+            extra_tools=self.cfg.extra_tools,
         )
-        system_content = SYSTEM_PROMPT + (SUB_AGENT_HINT if self.cfg.enable_sub_agent else "")
+        _uses_sub_agent = self.cfg.enable_sub_agent or TOOLS.SUB_AGENT in self.cfg.extra_tools
+        _other_extra = tuple(t for t in self.cfg.extra_tools if t != TOOLS.SUB_AGENT)
+        system_content = SYSTEM_PROMPT
+        if _uses_sub_agent:
+            system_content += SUB_AGENT_HINT
+        if _other_extra:
+            system_content += EXTRA_TOOLS_HINT
 
         messages = [
             {"role": "system", "content": system_content},

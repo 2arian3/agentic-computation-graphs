@@ -30,6 +30,8 @@ export const api = {
 
   traces: () => jget<{ traces: TraceInfo[] }>("/api/traces"),
   traceRuns: (file: string) => jget<{ runs: any[] }>(`/api/traces/runs?file=${encodeURIComponent(file)}`),
+  families: (files?: string[]) =>
+    jget<any>(`/api/families${files && files.length ? `?files=${encodeURIComponent(files.join(","))}` : ""}`),
 
   corpus: (kind = "corpus") => jget<{ kind: string; docs: Doc[] }>(`/api/corpus?kind=${kind}`),
   corpusSearch: (query: string, topK: number, noise: number) =>

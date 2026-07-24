@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-from . import corpus_store, history_store, paths, pipeline, presets, replay, serving
+from . import corpus_store, families, history_store, paths, pipeline, presets, replay, serving
 from .streaming import RUNS
 
 app = FastAPI(title="ACG Experiment Dashboard", version="1.0")
@@ -168,6 +168,16 @@ def api_trace_runs(file: str = Query(...)):
         raise HTTPException(404, str(e))
 
 
+@app.get("/api/families")
+def api_families(files: str | None = Query(None)):
+    """Per-family × per-backbone structural rollup (docs/12 view) from archived traces.
+
+    `files` is an optional comma-separated list of trace files under traces/; defaults to
+    the model-sweep traces (families_7b, families_fp8, families)."""
+    flist = [f.strip() for f in files.split(",") if f.strip()] if files else None
+    return families.rollup(flist)
+
+
 # --------------------------------------------------------------------------- #
 # Document manager (corpus CRUD)
 # --------------------------------------------------------------------------- #
@@ -256,5 +266,8 @@ if paths.FRONTEND_DIST.exists():
             return FileResponse(candidate)
         index = paths.FRONTEND_DIST / "index.html"
         if index.exists():
-            return FileResponse(index)
+            # index.html references content-hashed asset bundles, so it must never be served
+            # stale from cache or the browser keeps loading an old JS bundle (and the UI looks
+            # unchanged after a redeploy). Force revalidation of the HTML entrypoint.
+            return FileResponse(index, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
         return JSONResponse({"detail": "frontend not built"}, status_code=404)

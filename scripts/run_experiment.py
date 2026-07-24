@@ -34,6 +34,10 @@ def main() -> int:
     ap.add_argument("--tasks", default="all", help="'all' or comma-separated task_ids")
     ap.add_argument("--tasks-file", default=None,
                     help="path to a tasks .jsonl (default: cfg.tasks_path). e.g. data/tasks_branch.jsonl")
+    ap.add_argument("--corpus", default=None,
+                    help="path to a corpus .json (default: cfg.corpus_path). e.g. data/corpus_large.json")
+    ap.add_argument("--distractors", default=None,
+                    help="path to a distractors .json (optional). e.g. data/distractors_large.json")
     ap.add_argument("--reps", type=int, default=30, help="repetitions per task")
     ap.add_argument("--temperature", type=float, default=None, help="override decode temperature")
     ap.add_argument("--vary-seed", action="store_true",
@@ -51,7 +55,8 @@ def main() -> int:
         trace_file.unlink()
     T.configure_tracing(trace_file)
 
-    corpus = Corpus.load(cfg.corpus_path)
+    corpus_path = args.corpus or cfg.corpus_path
+    corpus = Corpus.load(corpus_path, args.distractors)
     tasks_path = args.tasks_file or cfg.tasks_path
     all_tasks = load_tasks(tasks_path)
     if args.tasks != "all":
@@ -75,6 +80,7 @@ def main() -> int:
         "seed_policy": seed_policy,
         "trace_file": str(trace_file),
         "tasks_file": str(tasks_path),
+        "corpus_file": str(corpus_path),
         "max_tool_workers": cfg.max_tool_workers,
     })
 

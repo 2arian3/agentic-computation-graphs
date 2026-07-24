@@ -175,6 +175,7 @@ export interface PromptPreset {
   hops: number;
   supporting: string[];
   group: string;
+  family?: string;
   branch: boolean;
 }
 

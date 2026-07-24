@@ -85,11 +85,10 @@ def delete_doc(doc_id: str, kind: str = "corpus") -> None:
 def reindex() -> dict[str, Any]:
     """Reload the corpus the way the agent does; report the rebuilt index size."""
     corpus = Corpus.load(paths.CORPUS_PATH, paths.DISTRACTORS_PATH)
-    total_terms = sum(len(toks) for toks in corpus._index.values())
     return {
-        "num_docs": len(corpus._index),
+        "num_docs": len(corpus.docs) - len(corpus.distractor_ids),
         "num_distractors": len(corpus.distractor_ids),
-        "total_indexed_terms": total_terms,
+        "scoring": corpus.scoring,
         "ok": True,
     }
 

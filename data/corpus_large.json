@@ -1,0 +1,307 @@
+[
+ {
+  "id": "D0001",
+  "title": "Zanodar",
+  "text": "Zanodar is a country on the continent of Kundar. Its capital is Corelldar. The currency used in Zanodar is the drovwick. Its population is about 2,900,000. The mineral fennunne is mined in Zanodar."
+ },
+ {
+  "id": "D0002",
+  "title": "Vanmora",
+  "text": "Vanmora is a country on the continent of Kundar. Its capital is Tarnumora. The currency used in Vanmora is the corane. Its population is about 2,000,000. The mineral keke is mined in Vanmora."
+ },
+ {
+  "id": "D0003",
+  "title": "Morinst",
+  "text": "Morinst is a country on the continent of Brovke. Its capital is Galelne. The currency used in Morinst is the vandell. Its population is about 3,700,000. The mineral keke is mined in Morinst."
+ },
+ {
+  "id": "D0004",
+  "title": "Kois",
+  "text": "Kois is a country on the continent of Wexene. Its capital is Pirinis. The currency used in Kois is the quininpast. Its population is about 4,000,000. The mineral fennunne is mined in Kois."
+ },
+ {
+  "id": "D0005",
+  "title": "Wexake",
+  "text": "Wexake is a country on the continent of Brovke. Its capital is Lumunos. The currency used in Wexake is the bromora. Its population is about 4,600,000. The mineral pirodell is mined in Wexake."
+ },
+ {
+  "id": "D0006",
+  "title": "Pirarmont",
+  "text": "Pirarmont is a country on the continent of Brovke. Its capital is Sundungate. The currency used in Pirarmont is the velldell. Its population is about 700,000. The mineral pirodell is mined in Pirarmont."
+ },
+ {
+  "id": "D0007",
+  "title": "Quinomont",
+  "text": "Quinomont is a country on the continent of Kundar. Its capital is Veluos. The currency used in Quinomont is the coreva. Its population is about 6,800,000. The mineral pirodell is mined in Quinomont."
+ },
+ {
+  "id": "D0008",
+  "title": "Morelmora",
+  "text": "Morelmora is a country on the continent of Wexene. Its capital is Piropast. The currency used in Morelmora is the wexedar. Its population is about 5,500,000. The mineral pirodell is mined in Morelmora."
+ },
+ {
+  "id": "D0009",
+  "title": "Drellmora",
+  "text": "Drellmora is a country on the continent of Brovke. Its capital is Tarnoke. The currency used in Drellmora is the fennarst. Its population is about 5,000,000. The mineral keke is mined in Drellmora."
+ },
+ {
+  "id": "D0010",
+  "title": "Velunth",
+  "text": "Velunth is a country on the continent of Brovke. Its capital is Sundellis. The currency used in Velunth is the velelldar. Its population is about 1,500,000. The mineral keke is mined in Velunth."
+ },
+ {
+  "id": "D0011",
+  "title": "Orraris",
+  "text": "Orraris is a country on the continent of Wexene. Its capital is Thust. The currency used in Orraris is the aureldell. Its population is about 4,300,000. The mineral pirodell is mined in Orraris."
+ },
+ {
+  "id": "D0012",
+  "title": "Bregate",
+  "text": "Bregate is a country on the continent of Wexene. Its capital is Pirelmont. The currency used in Bregate is the elelium. Its population is about 800,000. The mineral fennene is mined in Bregate."
+ },
+ {
+  "id": "D0013",
+  "title": "Corelldar",
+  "text": "Corelldar is an inland city in the country of Zanodar, founded in 1980. It is the capital."
+ },
+ {
+  "id": "D0014",
+  "title": "Pirelmont",
+  "text": "Pirelmont is a coastal city in the country of Bregate, founded in 1631. It is the capital."
+ },
+ {
+  "id": "D0015",
+  "title": "Tarnumora",
+  "text": "Tarnumora is a coastal city in the country of Vanmora, founded in 1860. It is the capital."
+ },
+ {
+  "id": "D0016",
+  "title": "Fennuwick",
+  "text": "Fennuwick is an inland city in the country of Morelmora, founded in 1605."
+ },
+ {
+  "id": "D0017",
+  "title": "Tarnoke",
+  "text": "Tarnoke is a coastal city in the country of Drellmora, founded in 1530. It is the capital."
+ },
+ {
+  "id": "D0018",
+  "title": "Lumodell",
+  "text": "Lumodell is an inland city in the country of Pirarmont, founded in 1781."
+ },
+ {
+  "id": "D0019",
+  "title": "Piropast",
+  "text": "Piropast is a coastal city in the country of Morelmora, founded in 1584. It is the capital."
+ },
+ {
+  "id": "D0020",
+  "title": "Lumeen",
+  "text": "Lumeen is a coastal city in the country of Morinst, founded in 1842."
+ },
+ {
+  "id": "D0021",
+  "title": "Thust",
+  "text": "Thust is a coastal city in the country of Orraris, founded in 1877. It is the capital."
+ },
+ {
+  "id": "D0022",
+  "title": "Sundungate",
+  "text": "Sundungate is an inland city in the country of Pirarmont, founded in 1968. It is the capital."
+ },
+ {
+  "id": "D0023",
+  "title": "Lumunos",
+  "text": "Lumunos is a coastal city in the country of Wexake, founded in 1850. It is the capital."
+ },
+ {
+  "id": "D0024",
+  "title": "Thelldar",
+  "text": "Thelldar is an inland city in the country of Velunth, founded in 1642."
+ },
+ {
+  "id": "D0025",
+  "title": "Galaris",
+  "text": "Galaris is an inland city in the country of Quinomont, founded in 1859."
+ },
+ {
+  "id": "D0026",
+  "title": "Veluos",
+  "text": "Veluos is an inland city in the country of Quinomont, founded in 1800. It is the capital."
+ },
+ {
+  "id": "D0027",
+  "title": "Kanmont",
+  "text": "Kanmont is a coastal city in the country of Quinomont, founded in 1751."
+ },
+ {
+  "id": "D0028",
+  "title": "Galelne",
+  "text": "Galelne is a coastal city in the country of Morinst, founded in 1702. It is the capital."
+ },
+ {
+  "id": "D0029",
+  "title": "Tarnundell",
+  "text": "Tarnundell is a coastal city in the country of Wexake, founded in 1821."
+ },
+ {
+  "id": "D0030",
+  "title": "Orrelke",
+  "text": "Orrelke is a coastal city in the country of Morelmora, founded in 1807."
+ },
+ {
+  "id": "D0031",
+  "title": "Sundora",
+  "text": "Sundora is an inland city in the country of Pirarmont, founded in 1790."
+ },
+ {
+  "id": "D0032",
+  "title": "Nyxinne",
+  "text": "Nyxinne is an inland city in the country of Morelmora, founded in 1871."
+ },
+ {
+  "id": "D0033",
+  "title": "Nyxovmora",
+  "text": "Nyxovmora is a coastal city in the country of Morelmora, founded in 1906."
+ },
+ {
+  "id": "D0034",
+  "title": "Broke",
+  "text": "Broke is a coastal city in the country of Morelmora, founded in 1678."
+ },
+ {
+  "id": "D0035",
+  "title": "Morunke",
+  "text": "Morunke is a coastal city in the country of Wexake, founded in 1650."
+ },
+ {
+  "id": "D0036",
+  "title": "Sundellis",
+  "text": "Sundellis is a coastal city in the country of Velunth, founded in 1855. It is the capital."
+ },
+ {
+  "id": "D0037",
+  "title": "Pirinis",
+  "text": "Pirinis is a coastal city in the country of Kois, founded in 1769. It is the capital."
+ },
+ {
+  "id": "D0038",
+  "title": "Nyxoen Institute",
+  "text": "The Nyxoen Institute is a research institute founded in 1965 by Dr. Fennanfell. It is located in the city of Piropast and is known for its work on tidal-energy systems."
+ },
+ {
+  "id": "D0039",
+  "title": "Moreldell Institute",
+  "text": "The Moreldell Institute is a research institute founded in 1964 by Dr. Ryduwick. It is located in the city of Pirinis and is known for its work on tidal-energy systems."
+ },
+ {
+  "id": "D0040",
+  "title": "Vunke Institute",
+  "text": "The Vunke Institute is a research institute founded in 1920 by Dr. Pirarium. It is located in the city of Nyxovmora and is known for its work on astronomy systems."
+ },
+ {
+  "id": "D0041",
+  "title": "Nyxunpast Institute",
+  "text": "The Nyxunpast Institute is a research institute founded in 1918 by Dr. Lumardar. It is located in the city of Galelne and is known for its work on marine-biology systems."
+ },
+ {
+  "id": "D0042",
+  "title": "Orrellra Institute",
+  "text": "The Orrellra Institute is a research institute founded in 1990 by Dr. Galanpast. It is located in the city of Lumeen and is known for its work on marine-biology systems."
+ },
+ {
+  "id": "D0043",
+  "title": "Lumarmont Institute",
+  "text": "The Lumarmont Institute is a research institute founded in 1947 by Dr. Kandar. It is located in the city of Sundora and is known for its work on seismology systems."
+ },
+ {
+  "id": "D0044",
+  "title": "Kardar Institute",
+  "text": "The Kardar Institute is a research institute founded in 1944 by Dr. Piruth. It is located in the city of Veluos and is known for its work on marine-biology systems."
+ },
+ {
+  "id": "D0045",
+  "title": "Galardell Institute",
+  "text": "The Galardell Institute is a research institute founded in 2003 by Dr. Kamont. It is located in the city of Morunke and is known for its work on tidal-energy systems."
+ },
+ {
+  "id": "D0046",
+  "title": "Tarnanpast Institute",
+  "text": "The Tarnanpast Institute is a research institute founded in 1988 by Dr. Zanunium. It is located in the city of Sundungate and is known for its work on tidal-energy systems."
+ },
+ {
+  "id": "D0047",
+  "title": "Elarwick Institute",
+  "text": "The Elarwick Institute is a research institute founded in 1981 by Dr. Tarnodar. It is located in the city of Sundellis and is known for its work on tidal-energy systems."
+ },
+ {
+  "id": "D0048",
+  "title": "Sundarva Institute",
+  "text": "The Sundarva Institute is a research institute founded in 1986 by Dr. Thellpast. It is located in the city of Piropast and is known for its work on cartography systems."
+ },
+ {
+  "id": "D0049",
+  "title": "Karmont Institute",
+  "text": "The Karmont Institute is a research institute founded in 1999 by Dr. Mororfell. It is located in the city of Nyxovmora and is known for its work on cartography systems."
+ },
+ {
+  "id": "D0050",
+  "title": "Corelne Dynamics",
+  "text": "Corelne Dynamics is a company headquartered in Orrelke. It builds a product called Piraris, whose key component is made of aurumont. Its annual revenue is about 3120 million."
+ },
+ {
+  "id": "D0051",
+  "title": "Kuva Dynamics",
+  "text": "Kuva Dynamics is a company headquartered in Lumodell. It builds a product called Rydarwick, whose key component is made of nyxorvane. Its annual revenue is about 1690 million."
+ },
+ {
+  "id": "D0052",
+  "title": "Moranis Dynamics",
+  "text": "Moranis Dynamics is a company headquartered in Corelldar. It builds a product called Auromont, whose key component is made of fennunne. Its annual revenue is about 2830 million."
+ },
+ {
+  "id": "D0053",
+  "title": "Tarnuth Dynamics",
+  "text": "Tarnuth Dynamics is a company headquartered in Sundellis. It builds a product called Wexelvane, whose key component is made of fennene. Its annual revenue is about 3050 million."
+ },
+ {
+  "id": "D0054",
+  "title": "Tarnelldell Dynamics",
+  "text": "Tarnelldell Dynamics is a company headquartered in Tarnundell. It builds a product called Quinardell, whose key component is made of pirodell. Its annual revenue is about 2320 million."
+ },
+ {
+  "id": "D0055",
+  "title": "Elarmora Dynamics",
+  "text": "Elarmora Dynamics is a company headquartered in Tarnoke. It builds a product called Nyxellgate, whose key component is made of nyxorvane. Its annual revenue is about 590 million."
+ },
+ {
+  "id": "D0056",
+  "title": "Zaninmora Dynamics",
+  "text": "Zaninmora Dynamics is a company headquartered in Lumeen. It builds a product called Lumellpast, whose key component is made of fennene. Its annual revenue is about 3620 million."
+ },
+ {
+  "id": "D0057",
+  "title": "Brangate Dynamics",
+  "text": "Brangate Dynamics is a company headquartered in Galaris. It builds a product called Morimra, whose key component is made of fennene. Its annual revenue is about 2850 million."
+ },
+ {
+  "id": "D0058",
+  "title": "Sundardell Dynamics",
+  "text": "Sundardell Dynamics is a company headquartered in Kanmont. It builds a product called Nyxunmont, whose key component is made of fennene. Its annual revenue is about 2730 million."
+ },
+ {
+  "id": "D0059",
+  "title": "Drellmont Dynamics",
+  "text": "Drellmont Dynamics is a company headquartered in Nyxinne. It builds a product called Breth, whose key component is made of fennunne. Its annual revenue is about 1760 million."
+ },
+ {
+  "id": "D0060",
+  "title": "Orroris Dynamics",
+  "text": "Orroris Dynamics is a company headquartered in Broke. It builds a product called Sundelne, whose key component is made of fennunne. Its annual revenue is about 1660 million."
+ },
+ {
+  "id": "D0061",
+  "title": "Quinest Dynamics",
+  "text": "Quinest Dynamics is a company headquartered in Lumunos. It builds a product called Kovis, whose key component is made of pirodell. Its annual revenue is about 1790 million."
+ }
+]

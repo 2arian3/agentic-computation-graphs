@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 from acg import graph as G
 
-from . import paths
+from . import families, paths
 from .graph_export import graph_to_json
 from .streaming import normalize_span
 
@@ -53,6 +53,7 @@ def _resolve(file: str) -> Path:
 def trace_runs(file: str) -> list[dict[str, Any]]:
     """Reconstruct every run in a trace file (metrics only) for a chooser list."""
     p = _resolve(file)
+    fam = families._family_map()
     runs = G.reconstruct_runs(p)
     out = []
     for r in runs:
@@ -61,6 +62,7 @@ def trace_runs(file: str) -> list[dict[str, Any]]:
             "trace_id": r.trace_id,
             "run_id": r.run_id,
             "task_id": r.task_id,
+            "family": fam.get(r.task_id),
             "outcome": gj["metrics"].get("outcome"),
             "node_count": gj["metrics"].get("node_count"),
             "total_tokens": gj["metrics"].get("total_tokens"),
