@@ -1,0 +1,64 @@
+{
+  "graph_id": "tracelab:claude:43ff8094-e948-9c03-0edd-1464d7b23616",
+  "dataset": "tracelab",
+  "source_domain": "coding",
+  "provenance": {
+    "file": "data/raw/tracelab/syfi_coding_trace.jsonl.gz",
+    "record_index": 14743,
+    "n_rounds": 976,
+    "provider": "claude",
+    "project": "project_0407a58e",
+    "release": "v0.0.1",
+    "tool_results_unconsumed": 0
+  },
+  "n_nodes": 2722,
+  "n_edges": 3342,
+  "node_types": {
+    "user": 249,
+    "llm": 976,
+    "tool": 1497
+  },
+  "edge_types": {
+    "agent_msg": 249,
+    "control": 1497,
+    "data": 1494,
+    "order": 102
+  },
+  "depth": 1850,
+  "max_fan_out": 29,
+  "measured_parallel_width": 20,
+  "models": {
+    "claude-opus-4-7": 845,
+    "claude-opus-4-8": 131
+  },
+  "input_tokens": 241022328,
+  "output_tokens": 1528283,
+  "prefill_tokens": 16270694,
+  "cache_hit_tokens": 224751634,
+  "cache_hit_ratio": 0.9324930012293301,
+  "tool_histogram": {
+    "Bash": 736,
+    "Read": 313,
+    "Edit": 224,
+    "TaskUpdate": 71,
+    "Write": 67,
+    "TaskCreate": 42,
+    "AskUserQuestion": 17,
+    "Agent": 11,
+    "TaskOutput": 4,
+    "ExitPlanMode": 3,
+    "ScheduleWakeup": 3,
+    "Skill": 2,
+    "EnterPlanMode": 2,
+    "TaskGet": 1,
+    "TaskStop": 1
+  },
+  "tool_status": {
+    "ok": 1292,
+    "error": 203,
+    "unknown": 2
+  },
+  "tool_latency_ms_total": 51365216,
+  "gen_latency_ms_total": 14664650.0,
+  "wall_seconds": 289835.9139997959
+}

@@ -1,0 +1,48 @@
+{
+  "graph_id": "tracelab:codex:c39743fe-cba9-899f-cc46-6f15e1b8cf43",
+  "dataset": "tracelab",
+  "source_domain": "coding",
+  "provenance": {
+    "file": "data/raw/tracelab/syfi_coding_trace.jsonl.gz",
+    "record_index": 114033,
+    "n_rounds": 14,
+    "provider": "codex",
+    "project": null,
+    "release": "v0.0.1",
+    "tool_results_unconsumed": 0
+  },
+  "n_nodes": 46,
+  "n_edges": 63,
+  "node_types": {
+    "user": 1,
+    "llm": 14,
+    "tool": 31
+  },
+  "edge_types": {
+    "agent_msg": 1,
+    "control": 31,
+    "data": 31
+  },
+  "depth": 27,
+  "max_fan_out": 4,
+  "measured_parallel_width": 5,
+  "models": {
+    "gpt-5.3-codex": 14
+  },
+  "input_tokens": 536138,
+  "output_tokens": 11823,
+  "prefill_tokens": 108874,
+  "cache_hit_tokens": 427264,
+  "cache_hit_ratio": 0.7969291488385453,
+  "tool_histogram": {
+    "exec_command": 27,
+    "apply_patch": 4
+  },
+  "tool_status": {
+    "error": 8,
+    "ok": 23
+  },
+  "tool_latency_ms_total": 701,
+  "gen_latency_ms_total": 257819.0,
+  "wall_seconds": 453.4210000038147
+}

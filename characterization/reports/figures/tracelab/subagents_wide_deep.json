@@ -1,0 +1,53 @@
+{
+  "graph_id": "tracelab:claude:280a5665-f8d4-fe4c-a63f-0769ea17238b",
+  "dataset": "tracelab",
+  "source_domain": "coding",
+  "provenance": {
+    "file": "data/raw/tracelab/syfi_coding_trace.jsonl.gz",
+    "record_index": 247210,
+    "n_rounds": 19,
+    "provider": "claude",
+    "project": "project_a3216e16",
+    "release": "v0.0.1",
+    "tool_results_unconsumed": 0
+  },
+  "n_nodes": 53,
+  "n_edges": 66,
+  "node_types": {
+    "user": 3,
+    "llm": 19,
+    "tool": 22,
+    "agent": 9
+  },
+  "edge_types": {
+    "agent_msg": 3,
+    "control": 31,
+    "data": 31,
+    "order": 1
+  },
+  "depth": 36,
+  "max_fan_out": 8,
+  "measured_parallel_width": 8,
+  "models": {
+    "claude-sonnet-4-6": 19
+  },
+  "input_tokens": 1524803,
+  "output_tokens": 34719,
+  "prefill_tokens": 208041,
+  "cache_hit_tokens": 1316762,
+  "cache_hit_ratio": 0.8635620470316493,
+  "tool_histogram": {
+    "Write": 8,
+    "Edit": 6,
+    "Read": 3,
+    "Bash": 2,
+    "TaskUpdate": 2,
+    "TaskCreate": 1
+  },
+  "tool_status": {
+    "ok": 22
+  },
+  "tool_latency_ms_total": 701823,
+  "gen_latency_ms_total": 370837.0,
+  "wall_seconds": 10880.520999908447
+}

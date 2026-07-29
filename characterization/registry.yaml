@@ -1,0 +1,293 @@
+# Dataset registry -- source of truth for the corpus.
+#
+# mode:
+#   extract       source ships runtime traces; parse them into canonical graphs
+#   partial       environment-flavoured; parse bundled example trajectories if any,
+#                 else defer to Phase 2 (instrumented run)
+#   workload_only no runtime trace; register as a size/shape prior, no extraction
+#
+# status: pending | extracted | partial | workload_only | gated | failed:<reason>
+#
+# source_verified records whether the URL/id below was confirmed reachable by this
+# pipeline. Unverified entries carry the candidate from the task spec and MUST be
+# confirmed (via the paper page) before download -- never invent a URL.
+
+datasets:
+  - id: tracelab
+    provenance_layers: {inference: real, environment: real, user: real_human, task: real_work, class: production_traffic}
+    content: {reasoning: none, tool_name: yes, tool_args: none, tool_output: none, outcome: none, note: "sanitized -- char counts only"}
+    order: 1
+    mode: extract
+    status: extracted
+    source_verified: true
+    source:
+      repo: https://github.com/uw-syfi/TraceLab
+      site: https://tracelab.cs.washington.edu
+      paper: https://arxiv.org/abs/2606.30560
+      release: v0.0.1
+      asset: syfi_coding_trace.jsonl.gz
+      url: https://github.com/uw-syfi/TraceLab/releases/download/v0.0.1/syfi_coding_trace.jsonl.gz
+      sha256: 9d265eae69a31cae203848bea936f018148eed7ca8bf56050c5abe96da0b4e6b
+    license: {code: Apache-2.0, data: CC BY 4.0}
+    source_domain: coding
+    record_structure: normalized LLM-round rows (one row = one LLM invocation)
+    notes: >-
+      Reference dataset. 357,161 rounds / 432,510 tool records / 4,265 sessions
+      from 43 developers' real Claude Code and Codex sessions. The only source in
+      this registry that ships tokens, latency, timestamps AND prefix-cache splits.
+      A newer release v0.0.2 (2026-07-24, ~2x size) exists but is not covered by
+      the README's published checksums; v0.0.1 is pinned for reproducibility.
+
+  - id: open_swe_traces
+    provenance_layers: {inference: real, environment: real, user: static_issue_text, task: real_github_issue, class: benchmark_run}
+    content: {reasoning: full, tool_name: yes, tool_args: full, tool_output: full, outcome: resolved_flag}
+    order: 2
+    mode: extract
+    status: pending
+    source_verified: false
+    source: {hf: nvidia/Open-SWE-Traces, paper: https://arxiv.org/abs/2606.16038}
+    source_domain: coding
+    record_structure: ReAct trajectory (SWE-agent / OpenHands)
+    notes: 207K trajectories. May be gated; if so record and continue.
+
+  - id: agentbank
+    content: {reasoning: full, tool_name: parse, tool_args: parse, tool_output: full, outcome: partial, note: "Thought:/Action:/Observation: text"}
+    order: 3
+    mode: extract
+    status: pending
+    source_verified: false
+    source: {paper: https://arxiv.org/abs/2410.07706, hf: resolve-from-paper-page}
+    source_domain: tool_use
+    record_structure: ReAct trajectory (thought/action/observation)
+    notes: 50K+ trajectories over 16 tasks.
+
+  - id: toolbench
+    content: {reasoning: thin, tool_name: yes, tool_args: full, tool_output: full, outcome: win_flag, note: "pruned branches recoverable"}
+    order: 4
+    mode: extract
+    status: pending
+    source_verified: false
+    source: {repo: https://github.com/OpenBMB/ToolBench, paper: https://arxiv.org/abs/2307.16789}
+    source_domain: tool_use
+    record_structure: DFSDT solution tree
+    notes: >-
+      The one dataset where explored-but-abandoned structure is recoverable.
+      Encode branches with branch_id; committed=true only on the answer path.
+
+  - id: tau2_bench
+    content: {reasoning: full, tool_name: yes, tool_args: full, tool_output: full, outcome: graded_reward, note: "also 100% timestamps, 65% token usage"}
+    order: 5
+    mode: extract
+    status: pending
+    source_verified: false
+    source: {repo: https://github.com/sierra-research/tau2-bench, paper: https://arxiv.org/abs/2406.12045}
+    source_domain: tool_use
+    record_structure: message list with tool_calls
+    notes: Leaderboard trajectories (S3 links in repo). Keep reward in provenance.
+
+  - id: agentboard
+    content: {reasoning: full, tool_name: yes, tool_args: full, tool_output: full, outcome: progress_rate, note: "unverified -- from README + file listing"}
+    order: 6
+    mode: extract
+    status: pending
+    source_verified: false
+    source: {repo: https://github.com/hkust-nlp/AgentBoard, paper: https://arxiv.org/abs/2401.13178}
+    source_domain: tool_use
+    record_structure: ReAct trajectory with per-step progress
+    notes: Released rollouts.
+
+  - id: xlam_apigen
+    content: {reasoning: partial, tool_name: yes, tool_args: full, tool_output: full, outcome: none, note: "APIGen-MT open; xLAM-60k gated 401"}
+    order: 7
+    mode: extract
+    status: pending
+    source_verified: false
+    source:
+      hf: [Salesforce/xlam-function-calling-60k, Salesforce/APIGen-MT-5k]
+    source_domain: tool_use
+    record_structure: function-call list / multi-turn trajectory
+    notes: >-
+      Multiple calls in one turn with no argument dependency become sibling nodes
+      with differing branch_id and no data edge -- candidate parallelism.
+
+  - id: appworld
+    content: {reasoning: none, tool_name: none, tool_args: none, tool_output: none, outcome: none, note: "environment only -- no released trajectories"}
+    order: 8
+    mode: partial
+    status: pending
+    source_verified: false
+    source: {repo: https://github.com/StonyBrookNLP/appworld, paper: https://arxiv.org/abs/2407.18901}
+    source_domain: tool_use
+    record_structure: stateful code episodes
+    notes: Derive data edges from variable def-use where exposed; else Phase 2.
+
+  - id: mind2web
+    content: {reasoning: none, tool_name: yes, tool_args: yes, tool_output: none, outcome: none, note: "human demos -- no rationale"}
+    order: 9
+    mode: extract
+    status: pending
+    source_verified: false
+    source: {hf: osunlp/Mind2Web, paper: https://arxiv.org/abs/2306.06070}
+    source_domain: web
+    record_structure: web-action sequence
+    notes: No LLM nodes. HAR files may carry real network timing -> tool_latency_ms.
+
+  - id: weblinx
+    content: {reasoning: none, tool_name: yes, tool_args: yes, tool_output: none, outcome: none, note: "human demos -- no rationale"}
+    order: 10
+    mode: extract
+    status: pending
+    source_verified: false
+    source: {hf: McGill-NLP/WebLINX, paper: https://arxiv.org/abs/2402.05930}
+    source_domain: web
+    record_structure: instructor/navigator turns
+    notes: Human demonstration; no tokens.
+
+  - id: toolsandbox
+    content: {reasoning: none, tool_name: none, tool_args: none, tool_output: none, outcome: none, note: "environment only -- no released trajectories"}
+    order: 11
+    mode: partial
+    status: pending
+    source_verified: false
+    source: {repo: https://github.com/apple/ToolSandbox, paper: https://arxiv.org/abs/2408.04682}
+    source_domain: tool_use
+    record_structure: environment with inter-tool state dependencies
+    notes: State preconditions become real data edges only under Phase 2.
+
+  - id: gaia
+    content: {reasoning: none, tool_name: none, tool_args: none, tool_output: none, outcome: answer, note: "gated 401"}
+    order: 12
+    mode: workload_only
+    status: pending
+    source_verified: false
+    source: {hf: gaia-benchmark/GAIA}
+    source_domain: qa
+    notes: Gated. Register step/tool counts per level as a size prior. No extraction.
+
+  - id: crag
+    content: {reasoning: none, tool_name: none, tool_args: none, tool_output: none, outcome: answer}
+    order: 13
+    mode: workload_only
+    status: pending
+    source_verified: false
+    source: {repo: https://github.com/facebookresearch/CRAG}
+    source_domain: rag
+    notes: Retrieval becomes a node only under Phase 2.
+
+  - id: fanoutqa
+    content: {reasoning: none, tool_name: none, tool_args: none, tool_output: none, outcome: answer}
+    order: 14
+    mode: workload_only
+    status: pending
+    source_verified: false
+    source: {site: https://fanoutqa.com, repo: https://github.com/zhudotexe/fanoutqa}
+    source_domain: qa
+    notes: Record gold decomposition width as a parallelism prior.
+
+  - id: musique
+    content: {reasoning: none, tool_name: none, tool_args: none, tool_output: none, outcome: answer_plus_gold_decomposition}
+    order: 15
+    mode: workload_only
+    status: pending
+    source_verified: false
+    source: {repo: https://github.com/StonyBrookNLP/musique}
+    source_domain: qa
+    notes: >-
+      Optionally emit the LOGICAL sub-question DAG (all cost fields null) as
+      validation ground truth. Must stay clearly separated from runtime graphs.
+
+  - id: hotpotqa
+    content: {reasoning: none, tool_name: none, tool_args: none, tool_output: none, outcome: answer}
+    order: 16
+    mode: workload_only
+    status: pending
+    source_verified: false
+    source: {hf: hotpot_qa}
+    source_domain: qa
+    notes: Baseline short-chain workload. No extraction.
+
+  # ---------------------------------------------------------------------------
+  # Added 2026-07-26: sources selected for SEMANTIC content (reasoning, tool
+  # args, tool outputs, prompts) on REAL substrate -- real GitHub repositories
+  # and real desktop applications. Explicitly excludes simulated-user or
+  # synthetic-generation sources (tau2-bench's user is a GPT-4.1 simulator over
+  # mock databases; APIGen-MT and xLAM are synthetic-generation pipelines;
+  # SWE-smith synthesises its bugs).
+  # ---------------------------------------------------------------------------
+
+  - id: swe_rebench_openhands
+    provenance_layers: {inference: real, environment: real, user: static_issue_text, task: real_github_issue, class: benchmark_run}
+    model: Qwen3-Coder-480B-A35B-Instruct  # dataset-card level, absent from parquet
+    content: {reasoning: full, tool_name: yes, tool_args: full, tool_output: full, outcome: resolved_flag, prompt: full, note: "structured tool_calls + tools.json schemas"}
+    order: 17
+    mode: extract
+    status: extracted
+    source_verified: true
+    source: {hf: nebius/SWE-rebench-openhands-trajectories, files: [trajectories.parquet, tools.json]}
+    license: {data: CC BY 4.0}
+    source_domain: coding
+    realness: real
+    record_structure: message list with tool_calls (OpenHands scaffold)
+    measured: >-
+      67,074 trajectories / 2.0 GB. Sampled 150: assistant steps with
+      reasoning or content 70.7%; tool calls with arguments 100%; tool results
+      non-empty 100%; system prompt present in 100%. Tools: execute_bash,
+      str_replace_editor, think, finish, task_tracker.
+    notes: >-
+      Real GitHub repositories via SWE-rebench. Best of the three for graph
+      extraction because tool calls are structured rather than prose, and
+      tools.json gives the exact tool schemas the model was prompted with.
+
+  - id: swe_agent_traj
+    provenance_layers: {inference: real, environment: real, user: static_issue_text, task: real_github_issue, class: benchmark_run}
+    content: {reasoning: full, tool_name: parse, tool_args: parse, tool_output: full, outcome: exit_status, prompt: full, note: "thought prose + fenced command"}
+    order: 18
+    mode: extract
+    status: extracted
+    source_verified: true
+    source: {hf: nebius/SWE-agent-trajectories}
+    license: {data: CC BY 4.0}
+    source_domain: coding
+    realness: real
+    record_structure: thought + action steps (SWE-agent scaffold)
+    measured: >-
+      80,036 trajectories / 1.1 GB across 12 shards. Sampled 150: 98.2% of
+      steps carry text; 100% of agent steps carry reasoning plus an action;
+      100% carry the full system_prompt. Models swe-agent-llama-70b / -8b.
+    notes: >-
+      Same domain as swe_rebench_openhands but a DIFFERENT scaffold, so the two
+      isolate how much graph structure comes from the harness rather than the
+      model. Tool name is embedded in a fenced command and must be parsed.
+
+  - id: osworld_gelato
+    provenance_layers: {inference: real, environment: real_apps_in_vm, user: none, task: authored_benchmark, class: benchmark_run}
+    content: {reasoning: full, tool_name: yes, tool_args: full, tool_output: full, outcome: per_run_dirs, prompt: partial, note: "cleanest per-step schema"}
+    order: 19
+    mode: extract
+    status: extracted
+    source_verified: true
+    source: {hf: mlfoundations/gelato-osworld-agent-trajectories}
+    license: {data: MIT}
+    source_domain: web
+    realness: real-controlled
+    record_structure: one JSONL per episode; per step reasoning/name/arguments/command/tool_output
+    measured: >-
+      2,166 episodes / 46 MB. Sampled 400 (5,860 steps): steps with reasoning
+      80.0%; structured arguments 93.1%; executed command 93.2%; tool_output
+      93.2%. Two agents (gelato-30b, gta1-32b_baseline) over 10 real desktop
+      apps (chrome, libreoffice_calc/impress/writer, gimp, vs_code, vlc,
+      thunderbird, os, multi_apps). Per-episode result.txt score: 1,208 pass /
+      909 fail. Tools: click, hotkey, type, scroll, drag_and_drop, open, wait.
+    acquisition_note: >-
+      The HF repo is 13.2 GB because of 34,598 screenshots; those are irrelevant
+      to computation graphs, so only *.jsonl/*.txt/*.json are fetched (46 MB).
+      2,166 unauthenticated small-file requests also trip HTTP 429 -- use few
+      workers and back off.
+    notes: >-
+      Computer-use agent driving REAL desktop applications (Chrome, VS Code,
+      GIMP, LibreOffice) in an Ubuntu VM. Cleanest schema of the three -- every
+      step already carries reasoning, tool name, structured arguments, the
+      executed pyautogui command AND the observation, so it needs almost no
+      parsing. Caveat on realness: the applications and OS are real, but the
+      task set is a benchmark harness, hence `real-controlled` not `real`.
+      Non-coding domain, which the other two do not cover.

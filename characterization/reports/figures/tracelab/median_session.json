@@ -1,0 +1,50 @@
+{
+  "graph_id": "tracelab:claude:b202b96f-70bd-38f5-9439-f1e06dca1915",
+  "dataset": "tracelab",
+  "source_domain": "coding",
+  "provenance": {
+    "file": "data/raw/tracelab/syfi_coding_trace.jsonl.gz",
+    "record_index": 23650,
+    "n_rounds": 15,
+    "provider": "claude",
+    "project": "project_e82be58a",
+    "release": "v0.0.1",
+    "tool_results_unconsumed": 0
+  },
+  "n_nodes": 46,
+  "n_edges": 61,
+  "node_types": {
+    "user": 1,
+    "llm": 15,
+    "tool": 30
+  },
+  "edge_types": {
+    "agent_msg": 1,
+    "control": 30,
+    "data": 30
+  },
+  "depth": 29,
+  "max_fan_out": 4,
+  "measured_parallel_width": 3,
+  "models": {
+    "claude-haiku-4-5-20251001": 15
+  },
+  "input_tokens": 856779,
+  "output_tokens": 6749,
+  "prefill_tokens": 40271,
+  "cache_hit_tokens": 816508,
+  "cache_hit_ratio": 0.9529972139840028,
+  "tool_histogram": {
+    "Read": 17,
+    "Bash": 8,
+    "Grep": 3,
+    "Glob": 2
+  },
+  "tool_status": {
+    "ok": 27,
+    "error": 3
+  },
+  "tool_latency_ms_total": 167796,
+  "gen_latency_ms_total": 26829.0,
+  "wall_seconds": 230.3970000743866
+}

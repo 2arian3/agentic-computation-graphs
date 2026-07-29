@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+# data/ is a symlink to /data/agentic-graph-corpus/data (raw artifacts + derived
+# graphs are large and reproducible from registry.yaml + the extractors)
+data
