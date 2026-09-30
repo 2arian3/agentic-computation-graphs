@@ -1,214 +1,187 @@
-# Agentic Computation Graphs — measurement instrument
+# Agentic Computation Graphs
 
-> Measuring the **size and structure of the graphs that LLM agents generate**, for one
-> narrow domain (tool-using multi-hop QA), on a controlled setup we fully own.
-> This repo implements **Month 1 ("build & validate the instrument")** and the first
-> **Month 2** measurements of the [4-month RA proposal](https://app.notion.com/p/38e5b71a74dc8174a76cc46609171d6f).
+When an LLM agent solves a task it makes many calls: it reasons, calls tools, and feeds the
+results back. The trace of those calls and their data dependencies is the **Agentic Computation
+Graph (ACG)**: each node is one LLM or tool call, each edge a data dependency. Graph size drives
+cost and latency directly.
 
-When an LLM application performs a task it makes *many* calls — it reasons, calls
-tools, feeds results back. The full trace of those calls and their dependencies is the
-**Agentic Computation Graph (ACG)**: each node is one LLM call or one tool call, each
-edge is a data dependency. Graph size drives cost and latency directly. This project
-measures that graph carefully and asks: *for the same task given to the same model, how
-much does the graph change from run to run, and what stays stable?*
+This project measures ACGs two ways:
 
-> **📚 Full documentation** is in [`docs/`](docs/):
-> [Implementation](docs/01-implementation.md) ·
-> [Usage](docs/02-usage.md) ·
-> [Results so far](docs/03-results.md) ·
-> [Next steps](docs/04-next-steps.md)
+1. **Controlled instrument** (`acg/`). A thin emergent agent loop on a locally served model with
+   pinned decode settings, traced with OpenTelemetry and reconstructed offline into a DAG. About
+   **2,000 runs** of tool using multi hop QA over a fictional corpus (so answers cannot come from
+   memory; closed book accuracy is 0/8 on the enriched task families).
+2. **Public trace corpus** (`characterization/`). **153,486 graphs / 13.9M nodes** extracted from
+   four public agent trace datasets into one schema.
 
-> **🖥️ Interactive dashboard.** [`webapp/`](webapp/) is a React + FastAPI app that runs
-> experiments and makes every stage observable — live ACG construction, retrieval scores,
-> reasoning, tools, sub-agents, metrics, history, and a document manager. It reuses this
-> pipeline unchanged (streaming via an extra OTel span processor) and can **replay archived
-> traces with the model server down**. Run it with `webapp/run.sh` → http://localhost:8100.
-> See [`webapp/README.md`](webapp/README.md) and [`docs/09`](docs/09-webapp-architecture.md).
+The question: for the same task and model, how much does the graph change from run to run, what
+shape does it have, and what drives that shape?
 
----
+![A production Claude session from TraceLab: 8 sub agents fanned out in parallel, depth 36](characterization/reports/figures/tracelab/subagents_wide_deep.png)
 
-## What's here (and the first results)
+## Setup (controlled runs)
 
-Everything below was produced on this machine: a single **NVIDIA H100 MIG `1g.24gb`
-slice (24 GB)** serving **Qwen2.5-7B-Instruct (BF16)** under **vLLM** in Docker.
+| Model | Precision | Tool parser |
+|---|---|---|
+| Qwen2.5-7B-Instruct | BF16 | hermes |
+| Qwen2.5-14B-Instruct | FP8 (8 bit) | hermes |
+| Qwen2.5-14B-Instruct | AWQ (4 bit) | hermes |
+| Llama-3.1-8B-Instruct | BF16 | llama3_json |
 
-### Instrument is validated (Month-1 milestone ✅)
-- **Determinism is pinnable.** Same prompt, `temperature=0`, `seed=1234` → byte-identical
-  output twice (`scripts/smoke_test.py`). This is the white-box control the variance
-  study depends on (Decision 1).
-- **Native tool-calling works**, so the loop is genuinely emergent (Decision 2).
-- **One task runs end-to-end and its graph is reconstructed from the trace**
-  (`scripts/run_single.py`). Example (task T02, 3-hop):
+All served with vLLM on one 24 GB H100 MIG slice. Default decode: temperature 0.7, top_p 0.95,
+varied seed per run. Two benchmarks: 12 canonical QA tasks (2 to 4 hops, 16 docs, tools
+`search / read_document / finish`) and an enriched benchmark (61 docs, BM25, 5 task families that
+each induce a distinct shape, extra tools `calculator / compare / verify_claim / decompose`,
+optional `sub_agent`).
 
-  ```
-  START -> LLM#0 -> tool:search -> LLM#1 -> tool:search -> LLM#2 -> tool:read_document -> LLM#3 -> tool:finish
-  node_count=8  depth=8  width=1  total_tokens=3623  outcome=correct  wall=2.98s
-  ```
+## Results
 
-### First measurements: graph size & structural variance (Month-2 milestone ✅)
-`scripts/run_experiment.py` — **12 QA programs × 8 reps = 96 runs**, `temperature=0.7`,
-per-run seeds (so the only thing changing is sampling). Accuracy **0.77**.
+### 1. Graph size is a distribution, and its variance has three sources
 
-| task | hops | acc  | nodes mean±sd | nodes med/p95/max | tok mean | tok p95 | #distinct shapes | modal frac |
-|------|------|------|---------------|-------------------|----------|---------|------------------|------------|
-| T01  | 2    | 1.00 | 5.9±0.3       | 6 / 6 / 6         | 2190     | 2203    | 2                | 0.88       |
-| T04  | 2    | 1.00 | 6.0±0.0       | 6 / 6 / 6         | 2201     | 2216    | **1**            | **1.00**   |
-| T08  | 2    | 1.00 | 6.0±0.0       | 6 / 6 / 6         | 2316     | 2332    | **1**            | **1.00**   |
-| T02  | 3    | 0.75 | 7.8±0.8       | 8 / 9 / 9         | 3814     | 4535    | 3                | 0.50       |
-| T05  | 3    | 0.50 | 9.1±1.2       | 10 / 10 / 10      | 4231     | 4844    | 4                | 0.50       |
-| T06  | 4    | 1.00 | 11.1±2.6      | 11 / 14 / 14      | 5607     | 7822    | **6**            | **0.38**   |
-| T12  | 4    | 1.00 | 9.5±3.0       | 10 / 14 / 16      | 4414     | 7631    | 5                | 0.38       |
+Qwen2.5-7B, task T06 (4 hops), 20 runs per regime:
 
-(Full table for all 12 tasks is printed by the script and saved to `traces/summary.json`.)
+| Regime | Distinct graph structures |
+|---|---|
+| fixed seed, prefix cache off | **1** (byte identical) |
+| fixed seed, prefix cache on | 3 |
+| fixed seed, 8 concurrent requests | 6 |
+| varied seed | 9 |
 
-**First honest findings:**
-1. **Graph size is a distribution, not a number.** For the same task+model, total tokens
-   vary widely — e.g. T06's p95 (7822) is **~1.4× its mean** (5607). Cost planning must
-   reason about the tail, exactly as the proposal argues.
-2. **Variance scales with task difficulty.** 2-hop tasks are structurally *stable*
-   (T04/T08: one single graph shape across all 8 runs). 4-hop tasks are *not* (T06:
-   6 distinct shapes, node counts 11–14). A clean, reportable trend.
-3. **Width is consistently 1.** Qwen2.5-7B decomposes these questions *serially* — it
-   never issues parallel tool calls. The variation lives in **depth / node-count across
-   runs**, not in within-run branching. An honest observation about this model+domain.
+* **Sampling ≫ KV/prefix cache ≫ batching.** Even at temperature 0 with a fixed seed, the prefix
+  cache breaks reproducibility: with it on, runs average 13.7 nodes / 7,364 tokens vs 8.0 / 3,303
+  with it off. Controlled runs must disable the cache.
+* **Temperature is the main knob:** distinct structures go 2 → 8 → 9 → 13 at temperature
+  0, 0.3, 0.7, 1.0.
+* **Variance scales with hops.** 2 hop tasks yield 1 or 2 shapes in 8 runs; 4 hop T06 yields 6
+  shapes in 8 runs and 14 in 50. Eight reps undersample the tail; about 50 per task are needed.
 
-### Bonus (§7): the two sources of variance, separated
-`scripts/determinism_check.py` on T06 (12 reps per regime):
+### 2. Agents linearize by policy, even when fan out is available
 
-| regime                  | runs | distinct ACG structures | node range |
-|-------------------------|------|-------------------------|------------|
-| fixed-seed @ temp = 0.0 | 12   | 1                       | 12–12      |
-| fixed-seed @ temp = 0.7 | 12   | 1                       | 9–9        |
-| varied-seed @ temp = 0.7| 12   | **6**                   | 8–12       |
+On the canonical suite, 84% of 7B runs are clean linear chains (width 1, finished, no repeated
+call) and 0% show parallel fan out. This holds under every control tested:
 
-With a fixed seed the graph is **perfectly reproducible even at temperature 0.7** — so
-in these runs *all* run-to-run structural variance comes from **sampling**, and
-serving-batch noise contributed none. Exactly the decomposition §7 promises.
+* **Corpus:** adding near duplicate distractors drops accuracy 0.77 → 0.56 while the graphs get
+  *more* linear (0.82 → 0.91). The agent misreads a distractor rather than querying again.
+* **Executor and tools:** with a concurrent executor, a `sub_agent` branch tool, and tasks that
+  require a sub chain per entity (6 tasks × 8 reps per cell):
 
-Figures: `traces/figures/dist_total_tokens.png`, `dist_node_count.png`, `acg_T02.png`.
+| Model | Accuracy plain → +sub_agent | Runs emitting ≥2 calls/turn (plain) | Runs with executed width ≥2 (+sub_agent) |
+|---|---|---|---|
+| Qwen2.5-7B BF16 | 0.60 → 0.71 | 6% | 8% |
+| Qwen2.5-14B FP8 | 0.81 → 0.56\* | 8% | 2% |
+| Qwen2.5-14B AWQ | 0.42 → **0.90** | **42%** | **31%** |
+| Llama-3.1-8B BF16 | 0.69 → 0.52 | **0%** | 10% |
 
----
+\* Tool protocol breakdown (60% of runs emit an unparsed `<tool_call>` as the answer), not a
+branching effect.
 
-## How the instrument works
+* **Emitted ≠ executed parallelism.** Without `sub_agent`, executed width never exceeds 1: the
+  corpus tools return almost instantly and never overlap in wall clock time, however many calls
+  are emitted in one turn.
+* **More emitted parallelism is not more capability.** The weakest model (4 bit AWQ) emits the most
+  parallel batches (42% of runs, up to 8 per turn).
+* **Second model family:** Llama-3.1-8B is the strictest linearizer (exactly one call per turn in
+  every plain run). About 50% of both Qwen 7B and Llama runs adopt `sub_agent`, but mostly call it
+  serially.
+* **`sub_agent` is not a general win:** it helps two models and hurts two.
+
+### 3. The backbone reshapes the graph for the same task
+
+Enriched benchmark, 40 tasks × 6 reps × 2 backbones = 480 runs (7B BF16 / 14B FP8):
+
+| Family | Accuracy | Mean nodes | Runs with width >1 |
+|---|---|---|---|
+| linear_bridge | 0.89 / 0.92 | 8.8 / 8.8 | 3% / 0% |
+| numeric_diff | **0.96 / 0.50** | 8.9 / 5.6 | 1% / 4% |
+| counting | 0.77 / 0.77 | 9.9 / 8.1 | 33% / 27% |
+| fan_out_superlative | 0.61 / 0.50 | 11.8 / 6.8 | 17% / **44%** |
+| unanswerable | 1.00 / 0.92 | 11.8 / 8.5 | 2% / 2% |
+
+* **Width becomes a real variable** once tasks and tools demand aggregation.
+* **The 14B FP8 loses by short circuiting the tool loop.** On `numeric_diff`, 50% of FP8 runs finish
+  after ≤1 tool call (7B: 1%), and accuracy ≈ 1 minus that rate. FP8 wrong runs average 1.2 nodes,
+  its correct runs 9.9 (7B: 9.1). Zero tool parse errors on either model, so the failure is
+  behavioral: the graph is bimodal, and a collapsed graph is a clean failure signature.
+* **Precision:** on the canonical retrieval suite FP8 beats 7B BF16 (accuracy 0.90 vs 0.77) while
+  4 bit AWQ collapses to 0.41 (45% of runs short circuit). On tool composition FP8 degrades
+  sharply. Caveat: FP8 vs 7B changes model size and precision at once; without a 14B BF16 control,
+  precision is not isolated as the cause.
+* **Smaller model ≠ cheaper run.** 7B uses more tokens per task (e.g. 10,353 vs 5,289 on
+  `fan_out_superlative`) because it builds bigger graphs.
+
+### 4. Finish decisions are calibrated; every premature stop was wrong
+
+180 runs with elicited reasoning, 697 decision points (7B): P(finish | answer in context) = 0.46 vs
+0.05 when it is not. All 19 premature finishes were wrong, and all were the same failure: stopping
+one hop early (the town instead of the country). Eliciting reasoning costs +14% tokens without
+changing graph width.
+
+### 5. Public traces: the harness bounds size and parallelism
+
+| Dataset | Graphs | Median nodes | Median depth | Median / max fan out | Reasoning | Tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| TraceLab (production coding sessions) | 4,265 | 46 | 33 | **3 / 29** | 0% | 42.6% |
+| SWE-rebench OpenHands | 67,074 | 123 | 122 | 1 / 2 | 71.2% | 0% |
+| SWE-agent trajectories | 80,036 | 35 | 34 | 1 / 1 | 100% | 0% |
+| OSWorld (Gelato) | 2,111 | 20 | 19 | 1 / 1 | 89.6% | 0% |
+
+* **Parallelism appears only where the harness permits it.** Across 13.1M benchmark nodes max fan
+  out is 1 (4 of 67,074 graphs reach 2). TraceLab reaches 29, with 16.8% of rounds issuing multiple
+  tools and 88.2% of those overlapping in wall clock time. Harness and model differ between these
+  sources, so the split between the two is not attributed here; the controlled runs above show models
+  linearize even when the harness allows fan out.
+* **Size is capped by configuration.** 8.9% of OpenHands runs sit exactly at 201 nodes (100 iteration
+  cap); OSWorld stops at 100 (50 step budget); SWE-agent decays to 817; TraceLab is unbounded (max
+  18,482). Published size distributions describe scaffold settings as much as workloads.
+* **Cost and semantics are disjoint in public data.** TraceLab has tokens, KV hits and timestamps
+  but 0% reasoning; the other three have 71 to 100% reasoning and 0% of every cost field. (Token
+  coverage is per node; TraceLab's 42.6% is every LLM node.)
+
+## How it works
 
 ```
- your QA task ──▶ Agent loop (acg/agent.py) ──▶ local model (vLLM, OpenAI API)
-                      │  thin, emergent: ask model → run tool → feed back → repeat
-                      │  fixed tools: search / read_document / finish  (acg/tools.py)
-                      ▼
-              OpenTelemetry GenAI spans (acg/tracing.py)  ──▶  traces/*.jsonl
-                      │  one span per LLM call & per tool call; parent/child + acg.depends_on
-                      ▼
-              offline reconstruction (acg/graph.py)  ──▶  ACG (a DAG) + metrics
-                      │  node count by type · edges · depth · width · tokens · latency · outcome
-                      ▼
-              aggregation (scripts/analyze.py)  ──▶  per-task distributions + structural variance
+task ──▶ agent loop (acg/agent.py) ──▶ vLLM (OpenAI API, pinned decode + seed)
+             │  model picks each step from a fixed tool set (acg/tools.py)
+             ▼
+   OpenTelemetry GenAI spans (acg/tracing.py) ──▶ traces/*.jsonl
+             │  one span per LLM/tool call, with acg.depends_on data edges
+             ▼
+   offline reconstruction (acg/graph.py) ──▶ ACG DAG + metrics
+             │  nodes by type, depth, emitted/executed width, tokens, latency, outcome
+             ▼
+   aggregation (scripts/analyze*.py) ──▶ per task distributions + structural variance
 ```
 
-The **agent's parent/child span tree is the graph**. Each LLM-call span records
-`acg.depends_on` = the tool nodes whose results it consumed; `acg/graph.py` turns those
-explicit data dependencies into the ACG DAG offline, so measurement never affects runs.
-
-### The two settled design decisions
-1. **Local model, not a closed product.** A variance study is only meaningful if
-   everything except sampling is held constant and known. We pin decode params + seed on
-   a local vLLM server. Closed products are reserved for the Month-4 realism check.
-2. **A thin emergent loop, not LangGraph.** In a framework *you* draw the graph; then
-   you'd be measuring your own structure. Here the **model** decides each step from a
-   fixed tool set, so the structure emerges from the model — which is the whole question.
-
----
-
-## Directory layout
+The loop is deliberately not LangGraph: in a framework you draw the graph yourself; here the model
+decides every step, so the structure is the model's.
 
 ```
-acg/                  the instrument (a small Python package)
-  config.py           pinned model/decode/seed settings (env-overridable)
-  tracing.py          OpenTelemetry GenAI spans + local JSONL exporter
-  llm_client.py       traced OpenAI-compatible client (records prompts + tokens)
-  tools.py            the fixed tool alphabet: search / read_document / finish
-  corpus.py           owned fictional mini-wiki + deterministic retrieval
-  agent.py            the thin emergent loop (NOT LangGraph)
-  tasks.py            task loading + graded answer checking
-  graph.py            reconstruct the ACG from a trace + compute metrics + draw
-data/
-  corpus.json         16-doc owned, fictional, multi-hop knowledge base
-  tasks.jsonl         12 multi-hop QA programs (2–4 hops) with gold answers
-docker/
-  serve_vllm.sh       deploy the model on the MIG slice via vLLM (primary)
-  serve_sglang.sh     same, via SGLang (alternative engine for the §7 study)
-  docker-compose.vllm.yml
-scripts/
-  smoke_test.py       validate determinism + tool-calling
-  run_single.py       Month-1: one task end-to-end, draw its ACG
-  run_experiment.py   Month-2: many tasks × N reps → distributions + variance
-  determinism_check.py §7: separate sampling variance from serving noise
-  analyze.py          aggregate any trace into distributions + figures
-tests/test_acgs.py    unit tests + live tests that produce AGCs for many QA programs
-config/pinned_settings.yaml   human-readable reproducibility manifest
-traces/               output: span JSONL, metrics.csv, summary.json, figures/
+acg/               the instrument (agent loop, tools, tracing, graph reconstruction)
+scripts/           experiment runners and analyses
+data/              fictional corpora, distractors, task files
+characterization/  public dataset extractors, schema, reports, figures
+webapp/            React + FastAPI dashboard: live ACG view and replay of archived traces
+docs/              implementation, usage, full experiment log, findings
 ```
 
 ## Quickstart
 
 ```bash
-# 0. client deps
-make venv                       # python3 -m venv .venv + pip install -r requirements.txt
-
-# 1. deploy the model on the 24 GB MIG slice (auto-detects the MIG CDI device)
-make serve                      # docker/serve_vllm.sh; wait ~1–2 min for warmup
-curl http://localhost:8000/v1/models
-
-# 2. validate the instrument
-make smoke
-
-# 3. Month-1 milestone: one task end-to-end + its graph
-make single TASK=T06
-
-# 4. Month-2: the multi-QA variance study
-make experiment REPS=8          # writes traces/metrics.csv, summary.json, figures/
-
-# 5. bonus: sampling vs serving-batch noise
-make determinism TASK=T06
-
-# tests (live ACG tests skip automatically if the server is down)
+make venv                      # client deps
+make serve                     # vLLM on the GPU (docker/serve_vllm.sh)
+make smoke                     # determinism + tool calling check
+make single TASK=T06           # one task end to end, draw its ACG
+make experiment REPS=8         # variance study over all tasks
 make test
+webapp/run.sh                  # dashboard on http://localhost:8100
 ```
 
-## Reproducing on a fresh 24 GB MIG node
+## Documentation
 
-The default model is **Qwen2.5-7B-Instruct** (BF16) — the FP16-class ceiling that fits a
-24 GB slice with room for KV cache, ungated, with strong native tool-calling. To go
-larger you would leave the FP16 white-box regime (e.g. an AWQ-quantized 14B); the model
-is a one-line swap via `ACG_MODEL` (set `ACG_TOOL_PARSER` to match, e.g. `llama3_json`
-for Llama-3.x).
-
-**Storage gotcha.** Docker's *containerd image store* defaults to `/var/lib/containerd`.
-The vLLM image is ~30 GB on disk, so if that path is on a small root partition the pull
-fails with `no space left on device`. Relocate it to a big disk once:
-
-```bash
-sudo systemctl stop docker docker.socket containerd
-sudo mv /var/lib/containerd /big-disk/containerd && sudo ln -s /big-disk/containerd /var/lib/containerd
-sudo systemctl start containerd docker
-```
-
-**MIG memory.** The slice reports ~20.9 / 23.8 GiB *free* at startup, so
-`--gpu-memory-utilization` must be ≤ ~0.85 (the default here) or the engine fails to
-allocate its KV cache.
-
-## What is measured (per the proposal)
-- **Per run:** node count split by type (LLM vs tool, and per tool), edge count + the
-  dependency structure, **depth** (longest chain → latency), **width** (max branching →
-  parallelism), **total tokens** (input+output → cost), per-node + whole-run latency,
-  and task outcome.
-- **Across runs of a task:** the *distribution* of each size metric (mean/median/p95/max),
-  **structural variance** (count of distinct graph shapes + a graph-edit-distance summary),
-  and whether a **stable core** exists (the modal-shape fraction).
-
-## Next steps (gated, per the proposal)
-- Scale reps where variance is high (T06/T12) for tighter tail estimates.
-- Sweep temperature to quantify its effect on graph size.
-- Month-4 realism check: run a handful of tasks through a closed product and compare the
-  rough graph shape. Then decide whether the next contract targets optimization.
-```
+[Implementation](docs/01-implementation.md) ·
+[Usage](docs/02-usage.md) ·
+[Experiment log](docs/07-experiment-log.md) ·
+[Findings](docs/08-findings.md) ·
+[Enriched benchmark results](docs/12-enriched-benchmark-results.md) ·
+[Public trace corpus](characterization/README.md) ·
+[Dashboard](webapp/README.md)
